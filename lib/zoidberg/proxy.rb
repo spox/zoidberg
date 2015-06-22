@@ -30,9 +30,9 @@ module Zoidberg
 
     # Used to proxy request to real instance
     def method_missing(*args, &block)
-      _aquire_lock!
-      res = nil
       begin
+        _aquire_lock!
+        res = nil
         res = @_raw_instance.send(*args, &block)
       rescue ::Zoidberg::Supervise::AbortException => e
         ::Kernel.raise e.original_exception
@@ -40,7 +40,12 @@ module Zoidberg
         if(@_supervised)
           _handle_unexpected_error(e)
         end
-        ::Kernel.raise e
+        if(e.class.to_s == 'fatal' && !@_fatal_retry)
+          @_fatal_retry = true
+          retry
+        else
+          ::Kernel.raise e
+        end
       ensure
         _release_lock!
       end
@@ -137,12 +142,13 @@ module Zoidberg
 
     # Destroy the real instance. Will update all methods on real
     # instance to raise exceptions noting it as terminated rendering
-    # it unusable.
+    # it unusable. This is generally used with the supervise module
+    # but can be used on its own if desired.
     #
     # @return [TrueClass]
     def _zoidberg_destroy!
       _aquire_lock!
-      death_from_above = lambda do
+      death_from_above = ::Proc.new do
         ::Kernel.raise ::Zoidberg::Supervise::DeadException.new('Instance in terminated state!')
       end
       m_scrub = (
