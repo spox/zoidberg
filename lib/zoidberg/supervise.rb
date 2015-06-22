@@ -20,7 +20,9 @@ module Zoidberg
       # @param e [Exception]
       # @raises [AbortException]
       def abort(e)
-        raise AbortException.new(e)
+        new_e = AbortException.new
+        new_e.original_exception = e
+        raise new_e
       end
 
     end
@@ -29,7 +31,7 @@ module Zoidberg
     #
     # @param klass [Class]
     def self.included(klass)
-      unless(klass.ancestors.include?(Zoidberg::Supervise))
+      unless(klass.ancestors.include?(Zoidberg::Supervise::InstanceMethods))
         klass.class_eval do
           include Zoidberg::Shell
           include InstanceMethods
