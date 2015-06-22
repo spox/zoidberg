@@ -18,6 +18,7 @@ module Zoidberg
     #
     # @return [self]
     def initialize(*args, &block)
+      _validate_worker_class!(args.first)
       @_signal = Signal.new
       @_worker_count = 1
       @_workers = []
@@ -30,6 +31,15 @@ module Zoidberg
         inst
       end
       _zoidberg_balance
+    end
+
+    # Validate worker class is properly supervised
+    #
+    # @raise [TypeError]
+    def _validate_worker_class!(klass)
+      unless(klass.ancestors.include?(Zoidberg::Supervise))
+        raise TypeError.new "Worker class `#{klass}` must include the `Zoidberg::Supervise` module!"
+      end
     end
 
     # Set or get the number of workers within the pool
