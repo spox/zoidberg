@@ -67,7 +67,7 @@ module Zoidberg
     #
     # @param klass [Class]
     def self.included(klass)
-      unless(klass.instance_methods.include?(:unshelled_new))
+      unless(klass.ancestors.include?(Zoidberg::Shell::InstanceMethods))
         klass.class_eval do
 
           class << self
