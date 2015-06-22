@@ -1,6 +1,7 @@
 require 'bogo'
 require 'zoidberg/version'
 
+# Why not Zoidberg!?
 module Zoidberg
   autoload :Future, 'zoidberg/future'
   autoload :Pool, 'zoidberg/pool'
