@@ -1,5 +1,4 @@
 require 'thread'
-require 'forwardable'
 require 'zoidberg'
 
 module Zoidberg
