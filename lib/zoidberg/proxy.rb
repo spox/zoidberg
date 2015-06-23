@@ -10,6 +10,8 @@ module Zoidberg
     attr_accessor :_build_args
     # @return [Thread] current owner of lock
     attr_reader :_locker
+    # @return [Object] wrapped instance
+    attr_reader :_raw_instance
 
     # Create a new proxy instance, new real instance, and link them
     #
