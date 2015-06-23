@@ -5,6 +5,17 @@ module Zoidberg
   # within a class will enable magic.
   module Shell
 
+    class AsyncProxy
+      attr_reader :target
+      def initialize(instance)
+        @target = instance
+      end
+      def method_missing(*args, &block)
+        Thread.new{ target.send(*args, &block) }
+        nil
+      end
+    end
+
     module InstanceMethods
 
       # Provide access to the proxy instance from the real instance
@@ -46,6 +57,10 @@ module Zoidberg
         result = yield if block_given?
         _zoidberg_proxy._aquire_lock!
         result
+      end
+
+      def async(unlocked=false)
+        AsyncProxy.new(unlocked ? self : current_self)
       end
 
     end

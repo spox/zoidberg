@@ -43,6 +43,12 @@ describe Zoidberg::Shell do
         def go
           @queue.push :ohai
         end
+        def me
+          self
+        end
+        def wrapped_me
+          current_self
+        end
       end
       c
     end
@@ -50,6 +56,11 @@ describe Zoidberg::Shell do
     it 'should build a new proxy instance' do
       inst = klass.new
       inst._zoidberg_object.wont_be_nil
+    end
+
+    it 'should provided wrapped and unwrapped self' do
+      inst = klass.new
+      inst.me.wont_equal inst.wrapped_me
     end
 
     it 'should behave like a normal instance' do
@@ -119,6 +130,43 @@ describe Zoidberg::Shell do
       inst.wait
       sleep(0.01)
       inst._zoidberg_locked?.must_equal false
+    end
+
+  end
+
+  describe 'async behavior' do
+
+    let(:klass) do
+      Class.new do
+        include Zoidberg::Shell
+        def act_busy
+          loop{ ::Kernel.sleep(1) }
+        end
+        def something_useful
+          :ohai
+        end
+      end
+    end
+
+    it 'should act busy when busy' do
+      inst = klass.new
+      t = Thread.new{ inst.act_busy }
+      sleep(0.01)
+      inst._zoidberg_available?.must_equal false
+    end
+
+    it 'should act busy when locked async busy' do
+      inst = klass.new
+      inst.async.act_busy
+      sleep(0.01)
+      inst._zoidberg_available?.must_equal false
+    end
+
+    it 'should not act busy when unlocked async busy' do
+      inst = klass.new
+      inst.async(:unlocked).act_busy
+      sleep(0.01)
+      inst._zoidberg_available?.must_equal true
     end
 
   end
