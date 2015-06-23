@@ -17,6 +17,7 @@ module Zoidberg
         end
         @_zoidberg_proxy
       end
+      alias_method :current_self, :_zoidberg_proxy
 
       # Provide a customized sleep behavior which will unlock the real
       # instance while sleeping
@@ -45,11 +46,6 @@ module Zoidberg
         result = yield if block_given?
         _zoidberg_proxy._aquire_lock!
         result
-      end
-
-      # @return [Zoidberg::Proxy] provide proxy when using `self`
-      def self
-        @_raw_instance._zoidberg_object
       end
 
     end
