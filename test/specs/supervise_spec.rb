@@ -60,4 +60,93 @@ describe Zoidberg::Supervise do
 
   end
 
+  describe 'supervised customized instance' do
+
+    before{ $terminated_log = Hash.new }
+
+    let(:klass) do
+      c = Class.new
+      c.class_eval do
+        include Zoidberg::Supervise
+        def snipe
+          raise 'AHHHHHHH'
+        end
+        def halted_snipe
+          begin
+            raise 'AHHHHHHH'
+          rescue => e
+            abort e
+          end
+        end
+      end
+      c
+    end
+
+    let(:klass_with_restart) do
+      c = klass.dup
+      c.class_eval do
+        attr_reader :restarted
+        def restart(error)
+          @restarted = true
+        end
+      end
+      c
+    end
+
+    let(:klass_with_terminate) do
+      c = klass.dup
+      c.class_eval do
+        attr_reader :terminated
+        def terminate
+          $terminated_log[object_id] = true
+        end
+      end
+      c
+    end
+
+    let(:klass_with_restart_and_terminate) do
+      c = klass.dup
+      c.class_eval do
+        attr_reader :restarted
+        attr_reader :terminated
+        def restart(error)
+          @restarted = true
+        end
+        def terminate
+          $terminated_log[object_id] = true
+        end
+      end
+      c
+    end
+
+    it 'should call restart when provided on instance' do
+      inst = klass_with_restart.new
+      obj_id = inst.object_id
+      ->{ inst.snipe }.must_raise RuntimeError
+      sleep(0.01)
+      inst.object_id.must_equal obj_id
+      inst.restarted.must_equal true
+    end
+
+    it 'should call terminate when provided on instance' do
+      inst = klass_with_terminate.new
+      obj_id = inst.object_id
+      ->{ inst.snipe }.must_raise RuntimeError
+      sleep(0.01)
+      inst.object_id.wont_equal obj_id
+      $terminated_log[obj_id].must_equal true
+    end
+
+    it 'should call restart and not terminate when provided on instance' do
+      inst = klass_with_restart_and_terminate.new
+      obj_id = inst.object_id
+      ->{ inst.snipe }.must_raise RuntimeError
+      sleep(0.01)
+      inst.object_id.must_equal obj_id
+      inst.restarted.must_equal true
+      $terminated_log[obj_id].wont_equal true
+    end
+
+  end
+
 end

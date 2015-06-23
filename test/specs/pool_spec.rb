@@ -59,4 +59,15 @@ describe Zoidberg::Pool do
     pool._workers.first.object_id.wont_equal o_id
   end
 
+  it 'should process all requests' do
+    pool._worker_count 5
+    pool._workers.size.must_equal 5
+    threads = 100.times.map do
+      Thread.new{ pool.ohai }
+    end
+    threads.map(&:alive?).must_include true
+    sleep(0.1)
+    threads.map(&:alive?).wont_include true
+  end
+
 end
