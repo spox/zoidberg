@@ -174,7 +174,9 @@ module Zoidberg
     def _handle_unexpected_error(error)
       if(_zoidberg_link)
         if(_zoidberg_link.class.trap_exit)
-          _zoidberg_link.async.trap_exit(@_raw_instance, error)
+          _zoidberg_link.async do
+            send(_zoidberg_link.class.trap_exit, @_raw_instance, error)
+          end
         end
       end
       if(@_raw_instance.respond_to?(:restart))
@@ -205,14 +207,18 @@ module Zoidberg
       death_from_above = ::Proc.new do
         ::Kernel.raise ::Zoidberg::DeadException.new('Instance in terminated state!')
       end
-      m_scrub = (
-        @_raw_instance.public_methods +
-        @_raw_instance.protected_methods
-      ) - ::Object.public_instance_methods
-      m_scrub.each do |m_name|
-        next if [:object_id, :defined_singleton_method, :send].include?(m_name)
+      death_from_above_display = ::Proc.new do
+        "#<#{self.class}:TERMINATED>"
+      end
+      (
+        @_raw_instance.public_methods(false) +
+        @_raw_instance.protected_methods(false) +
+        @_raw_instance.private_methods(false)
+      ).each do |m_name|
         @_raw_instance.send(:define_singleton_method, m_name, &death_from_above)
       end
+      @_raw_instance.send(:define_singleton_method, :to_s, &death_from_above_display)
+      @_raw_instance.send(:define_singleton_method, :inspect, &death_from_above_display)
       _zoidberg_signal(:destroyed)
       _release_lock!
       true
