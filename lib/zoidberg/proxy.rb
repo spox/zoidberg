@@ -211,3 +211,10 @@ module Zoidberg
   end
 
 end
+
+# jruby compat
+if(Zoidberg::Proxy.instance_methods.include?(:object_id))
+  class Zoidberg::Proxy
+    undef_method :object_id
+  end
+end
