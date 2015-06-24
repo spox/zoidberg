@@ -68,9 +68,18 @@ module Zoidberg
       # Perform an async action
       #
       # @param unlocked [Truthy, Falsey] lock when running
-      # @return [AsyncProxy]
+      # @return [AsyncProxy, NilClass]
       def async(unlocked=false)
-        AsyncProxy.new(unlocked ? self : current_self)
+        if(block_given?)
+          if(unlocked)
+            Thread.new(&block)
+          else
+            Thread.new{ current_self.instance_exec(&block) }
+          end
+          nil
+        else
+          AsyncProxy.new(unlocked ? self : current_self)
+        end
       end
 
       # Link given shelled instance to current shelled instance to
