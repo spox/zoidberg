@@ -8,10 +8,6 @@ module Zoidberg
       attr_accessor :original_exception
     end
 
-    # Customized exception type used when instance has been terminated
-    class DeadException < StandardError
-    end
-
     module InstanceMethods
 
       # Customized method for raising exceptions that have been
