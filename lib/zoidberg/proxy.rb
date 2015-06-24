@@ -66,10 +66,20 @@ module Zoidberg
       begin
         _aquire_lock!
         res = nil
-        res = @_raw_instance.__send__(*args, &block)
+        if(::ENV['ZOIDBERG_TESTING'])
+          ::Kernel.require 'timeout'
+          ::Timeout.timeout(20) do
+            res = @_raw_instance.__send__(*args, &block)
+          end
+        else
+          res = @_raw_instance.__send__(*args, &block)
+        end
       rescue ::Zoidberg::Supervise::AbortException => e
         ::Kernel.raise e.original_exception
       rescue ::Exception => e
+        if(defined?(Timeout) && e.is_a?(Timeout::Error))
+          ::Kernel.raise e
+        end
         if(@_supervised)
           _handle_unexpected_error(e)
         end
@@ -99,12 +109,8 @@ module Zoidberg
     # @return [TrueClass, FalseClass] signal was sent
     def _zoidberg_signal(sig)
       if(@_zoidberg_signal)
-        begin
-          @_zoidberg_signal.signal(sig)
-          true
-        rescue => e
-          $stdout.puts "WAT: #{e.class} - #{e}"
-        end
+        @_zoidberg_signal.signal(sig)
+        true
       else
         false
       end
