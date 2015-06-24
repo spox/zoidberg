@@ -187,7 +187,7 @@ describe Zoidberg::Shell do
       inst = klass.new
       inst.something_useful.must_equal :ohai
       inst._zoidberg_destroy!
-      ->{ inst.something_useful }.must_raise Zoidberg::Supervise::DeadException
+      ->{ inst.something_useful }.must_raise Zoidberg::DeadException
     end
 
   end

@@ -45,17 +45,17 @@ describe Zoidberg::Supervise do
 
     it 'should rebuild instance on unexpected exception' do
       inst = klass.new
-      o_id = inst.object_id
+      o_id = inst._raw_instance.object_id
       ->{ inst.snipe }.must_raise RuntimeError
       sleep(0.01)
-      inst.object_id.wont_equal o_id
+      inst._raw_instance.object_id.wont_equal o_id
     end
 
     it 'should not rebuild instance on expected exception' do
       inst = klass.new
-      o_id = inst.object_id
+      o_id = inst._raw_instance.object_id
       ->{ inst.halted_snipe }.must_raise RuntimeError
-      inst.object_id.must_equal o_id
+      inst._raw_instance.object_id.must_equal o_id
     end
 
   end
@@ -130,10 +130,10 @@ describe Zoidberg::Supervise do
 
     it 'should call terminate when provided on instance' do
       inst = klass_with_terminate.new
-      obj_id = inst.object_id
+      obj_id = inst._raw_instance.object_id
       ->{ inst.snipe }.must_raise RuntimeError
       sleep(0.01)
-      inst.object_id.wont_equal obj_id
+      inst._raw_instance.object_id.wont_equal obj_id
       $terminated_log[obj_id].must_equal true
     end
 

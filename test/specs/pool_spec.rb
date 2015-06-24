@@ -52,11 +52,11 @@ describe Zoidberg::Pool do
   end
 
   it 'should still have worker if worker dies' do
-    o_id = pool._workers.first.object_id
-    pool._workers.first.object_id.must_equal o_id
+    o_id = pool._workers.first._raw_instance.object_id
+    pool._workers.first._raw_instance.object_id.must_equal o_id
     ->{ pool.snipe }.must_raise RuntimeError
     pool._workers.size.must_equal 1
-    pool._workers.first.object_id.wont_equal o_id
+    pool._workers.first._raw_instance.object_id.wont_equal o_id
   end
 
   it 'should process all requests' do
