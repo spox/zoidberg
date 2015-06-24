@@ -62,11 +62,11 @@ describe Zoidberg::Pool do
   it 'should process all requests' do
     pool._worker_count 5
     pool._workers.size.must_equal 5
-    threads = 100.times.map do
-      Thread.new{ pool.ohai }
+    threads = 50.times.map do |i|
+      Thread.new{ sleep(rand(1)); pool.ohai }
     end
     threads.map(&:alive?).must_include true
-    sleep(1)
+    sleep(1.2)
     threads.map(&:alive?).wont_include true
   end
 
