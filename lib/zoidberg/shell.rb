@@ -1,6 +1,11 @@
 require 'zoidberg'
 
 module Zoidberg
+
+  # Customized exception type used when instance has been terminated
+  class DeadException < RuntimeError
+  end
+
   # Provides a wrapping around a real instance. Including this module
   # within a class will enable magic.
   module Shell
@@ -29,6 +34,7 @@ module Zoidberg
         @_zoidberg_proxy
       end
       alias_method :current_self, :_zoidberg_proxy
+      alias_method :current_actor, :_zoidberg_proxy
 
       # Provide a customized sleep behavior which will unlock the real
       # instance while sleeping
@@ -59,8 +65,21 @@ module Zoidberg
         result
       end
 
+      # Perform an async action
+      #
+      # @param unlocked [Truthy, Falsey] lock when running
+      # @return [AsyncProxy]
       def async(unlocked=false)
         AsyncProxy.new(unlocked ? self : current_self)
+      end
+
+      # Link given shelled instance to current shelled instance to
+      # handle any exceptions raised from async actions
+      #
+      # @param inst [Object]
+      # @return [TrueClass]
+      def link(inst)
+
       end
 
     end
@@ -69,7 +88,18 @@ module Zoidberg
 
       # Override real instance's .new method to provide a proxy instance
       def new(*args, &block)
-        Zoidberg::Proxy.new(self, *args, &block)
+        proxy = Zoidberg::Proxy.new(self, *args, &block)
+        weak_ref = Zoidberg::WeakRef.new(proxy)
+        Zoidberg::Proxy.register(weak_ref.__id__, proxy)
+        ObjectSpace.define_finalizer(weak_ref, Zoidberg::Proxy.method(:scrub!))
+        weak_ref
+      end
+
+      def trap_exit(m_name=nil)
+        if(m_name)
+          @m_name = m_name
+        end
+        @m_name
       end
 
     end
