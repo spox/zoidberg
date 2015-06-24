@@ -1,10 +1,41 @@
-require 'thread'
 require 'zoidberg'
 
 module Zoidberg
 
   # Instance proxy that filters requests to shelled instance
   class Proxy < BasicObject
+
+    @@__registry = ::Hash.new
+
+    class << self
+
+      # @return [Hash] WeakRef -> Proxy mapping
+      def registry
+        @@__registry
+      end
+
+      # Register the proxy a WeakRef is pointing to
+      #
+      # @param r_id [Integer] object ID of WeakRef
+      # @param proxy [Zoidberg::Proxy] actual proxy instance
+      # @return [Zoidberg::Proxy]
+      def register(r_id, proxy)
+        @@__registry[r_id] = proxy
+      end
+
+      # Destroy the proxy referenced by the WeakRef with the provided
+      # ID
+      #
+      # @param o_id [Integer] Object ID
+      # @return [Truthy, Falsey]
+      def scrub!(o_id)
+        proxy = @@__registry.delete(o_id)
+        if(proxy)
+          proxy._zoidberg_destroy!
+        end
+      end
+
+    end
 
     # @return [Array] arguments used to build real instance
     attr_accessor :_build_args
@@ -19,12 +50,12 @@ module Zoidberg
     def initialize(klass, *args, &block)
       @_build_args = [klass, args, block]
       @_raw_instance = klass.unshelled_new(*args, &block)
-      @_raw_instance._zoidberg_proxy(self)
       @_lock = ::Mutex.new
       @_count_lock = ::Mutex.new
       @_locker = nil
       @_locker_count = 0
       @_zoidberg_signal = nil
+      @_raw_instance._zoidberg_proxy(self)
       if(@_raw_instance.class.ancestors.include?(::Zoidberg::Supervise))
         @_supervised = true
       end
@@ -35,7 +66,7 @@ module Zoidberg
       begin
         _aquire_lock!
         res = nil
-        res = @_raw_instance.send(*args, &block)
+        res = @_raw_instance.__send__(*args, &block)
       rescue ::Zoidberg::Supervise::AbortException => e
         ::Kernel.raise e.original_exception
       rescue ::Exception => e
@@ -151,7 +182,7 @@ module Zoidberg
     def _zoidberg_destroy!
       _aquire_lock!
       death_from_above = ::Proc.new do
-        ::Kernel.raise ::Zoidberg::Supervise::DeadException.new('Instance in terminated state!')
+        ::Kernel.raise ::Zoidberg::DeadException.new('Instance in terminated state!')
       end
       m_scrub = (
         @_raw_instance.public_methods +
