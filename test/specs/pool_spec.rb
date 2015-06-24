@@ -66,7 +66,7 @@ describe Zoidberg::Pool do
       Thread.new{ pool.ohai }
     end
     threads.map(&:alive?).must_include true
-    sleep(0.1)
+    sleep(1)
     threads.map(&:alive?).wont_include true
   end
 
