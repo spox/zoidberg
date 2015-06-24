@@ -22,7 +22,7 @@ module Zoidberg
     # @param signal [Symbol] name of signal
     # @return [TrueClass, FalseClass] if signal was sent
     def signal(signal)
-      if(@waiters[signal] && !@waiters[signal][:threads].empty?)
+      if(@waiters[signal]) # && !@waiters[signal][:threads].empty?)
         @waiters[signal][:queue].push nil
         true
       else
@@ -35,7 +35,7 @@ module Zoidberg
     # @param signal [Symbol] name of signal
     # @return [TrueClass, FalseClass] if signal(s) was/were sent
     def broadcast(signal)
-      if(@waiters[signal] && !@waiters[signal][:threads].empty?)
+      if(@waiters[signal]) # && !@waiters[signal][:threads].empty?)
         @waiters[signal][:threads].size.times do
           @waiters[signal][:queue].push nil
         end
