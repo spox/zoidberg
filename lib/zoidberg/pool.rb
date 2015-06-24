@@ -86,7 +86,7 @@ module Zoidberg
     # @return [Object]
     def _zoidberg_free_worker
       until(worker = @_workers.detect(&:_zoidberg_available?))
-        defer{ _signal.wait_for(:unlocked)}
+        defer{ _signal.wait_for(:unlocked) }
       end
       worker
     end
