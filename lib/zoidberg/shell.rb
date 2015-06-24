@@ -88,7 +88,8 @@ module Zoidberg
       # @param inst [Object]
       # @return [TrueClass]
       def link(inst)
-
+        inst._zoidberg_link = current_self
+        true
       end
 
     end

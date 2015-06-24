@@ -95,6 +95,16 @@ module Zoidberg
       res
     end
 
+    # @return [Object]
+    def _zoidberg_link=(inst)
+      @_zoidberg_link = inst
+    end
+
+    # @return [Object, NilClass]
+    def _zoidberg_link
+      @_zoidberg_link
+    end
+
     # Set an optional state signal instance
     #
     # @param signal [Signal]
@@ -162,6 +172,11 @@ module Zoidberg
     # @param error [Exception] exception that was caught
     # @return [TrueClass]
     def _handle_unexpected_error(error)
+      if(_zoidberg_link)
+        if(_zoidberg_link.class.trap_exit)
+          _zoidberg_link.async.trap_exit(@_raw_instance, error)
+        end
+      end
       if(@_raw_instance.respond_to?(:restart))
         @_raw_instance.restart(error)
       else
