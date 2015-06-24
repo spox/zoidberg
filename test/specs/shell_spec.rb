@@ -192,4 +192,56 @@ describe Zoidberg::Shell do
 
   end
 
+  describe 'garbage collection' do
+
+    let(:klass) do
+      Class.new do
+        include Zoidberg::Shell
+
+        def something_useful
+          :ohai
+        end
+      end
+    end
+
+    it 'should not really be the object it claims to be' do
+      inst = klass.new
+      inst.__id__.wont_equal inst.object_id
+    end
+
+    it 'should keep a register of itself' do
+      inst = klass.new
+      Zoidberg::Proxy.registry[inst.__id__].wont_be_nil
+      Zoidberg::Proxy.registry[inst.__id__]._zoidberg_available?.wont_be_nil
+    end
+
+    it 'should properly unregister itself' do
+      inst = klass.new
+      o_id = inst.__id__
+      Zoidberg::Proxy.registry[o_id].wont_be_nil
+      inst = nil
+      GC.start
+      sleep(0.01)
+      GC.start
+      sleep(0.01)
+      Zoidberg::Proxy.registry[o_id].must_be_nil
+    end
+
+    it 'should destroy real instance when unregistering' do
+      inst = klass.new
+      o_id = inst.__id__
+      Zoidberg::Proxy.registry[o_id].wont_be_nil
+      obj = inst._raw_instance
+      obj.something_useful.must_equal :ohai
+      inst = nil
+      GC.start
+      sleep(0.01)
+      GC.start
+      sleep(0.01)
+      Zoidberg::Proxy.registry[o_id].must_be_nil
+      ->{ obj.something_useful }.must_raise Zoidberg::DeadException
+    end
+
+  end
+
 end
