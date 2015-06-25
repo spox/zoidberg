@@ -43,6 +43,8 @@ module Zoidberg
     attr_reader :_locker
     # @return [Object] wrapped instance
     attr_reader :_raw_instance
+    # @return [Hash<Integer:Thread>]
+    attr_reader :_raw_threads
 
     # Create a new proxy instance, new real instance, and link them
     #
@@ -56,6 +58,7 @@ module Zoidberg
       @_locker_count = 0
       @_zoidberg_signal = nil
       @_raw_instance._zoidberg_proxy(self)
+      @_raw_threads = ::Smash.new{ ::Array.new }
       if(@_raw_instance.class.ancestors.include?(::Zoidberg::Supervise))
         @_supervised = true
       end
@@ -219,6 +222,12 @@ module Zoidberg
       end
       @_raw_instance.send(:define_singleton_method, :to_s, &death_from_above_display)
       @_raw_instance.send(:define_singleton_method, :inspect, &death_from_above_display)
+      @_raw_threads[@_raw_instance.object_id].map do |thread|
+        thread.raise ::Zoidberg::DeadException.new('Instance in terminated state!')
+      end.map do |thread|
+        thread.join(2)
+      end.find_all(&:alive?).map(&:kill)
+      @_raw_threads.delete(@_raw_instance.object_id)
       _zoidberg_signal(:destroyed)
       _release_lock!
       true
@@ -233,7 +242,7 @@ module Zoidberg
 
 end
 
-# jruby compat
+# jruby compat [https://github.com/jruby/jruby/pull/2520]
 if(Zoidberg::Proxy.instance_methods.include?(:object_id))
   class Zoidberg::Proxy
     undef_method :object_id
