@@ -16,7 +16,9 @@ module Zoidberg
         @target = instance
       end
       def method_missing(*args, &block)
-        Thread.new{ target.send(*args, &block) }
+        target._zoidberg_thread(
+          Thread.new{ target.send(*args, &block) }
+        )
         nil
       end
     end
@@ -35,6 +37,16 @@ module Zoidberg
       end
       alias_method :current_self, :_zoidberg_proxy
       alias_method :current_actor, :_zoidberg_proxy
+
+      # Register a running thread for this instance. Registered
+      # threads are tracked and killed on cleanup
+      #
+      # @param thread [Thread]
+      # @return [TrueClass]
+      def _zoidberg_thread(thread)
+        _zoidberg_proxy._raw_threads[self.object_id].push(thread)
+        true
+      end
 
       # Provide a customized sleep behavior which will unlock the real
       # instance while sleeping
@@ -72,10 +84,11 @@ module Zoidberg
       def async(unlocked=false)
         if(block_given?)
           if(unlocked)
-            Thread.new(&block)
+            thread = Thread.new(&block)
           else
-            Thread.new{ current_self.instance_exec(&block) }
+            thread = Thread.new{ current_self.instance_exec(&block) }
           end
+          _zoidberg_thread(thread)
           nil
         else
           AsyncProxy.new(unlocked ? self : current_self)
