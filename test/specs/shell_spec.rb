@@ -234,10 +234,8 @@ describe Zoidberg::Shell do
       obj = inst._raw_instance
       obj.something_useful.must_equal :ohai
       inst = nil
-      GC.start
-      sleep(0.1)
-      GC.start
-      sleep(0.1)
+      ObjectSpace.garbage_collect
+      sleep(0.02)
       Zoidberg::Proxy.registry[o_id].must_be_nil
       ->{ obj.something_useful }.must_raise Zoidberg::DeadException
     end
