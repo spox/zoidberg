@@ -43,7 +43,7 @@ module Zoidberg
 
 end
 
-# jruby compat
+# jruby compat [https://github.com/jruby/jruby/pull/2520]
 if(Zoidberg::WeakRef.instance_methods.include?(:object_id))
   class Zoidberg::WeakRef
     undef_method :object_id
