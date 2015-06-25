@@ -207,27 +207,30 @@ module Zoidberg
     # @return [TrueClass]
     def _zoidberg_destroy!
       _aquire_lock!
-      death_from_above = ::Proc.new do
-        ::Kernel.raise ::Zoidberg::DeadException.new('Instance in terminated state!')
+      unless(@_raw_instance.respond_to?(:_zoidberg_destroyed))
+        death_from_above = ::Proc.new do
+          ::Kernel.raise ::Zoidberg::DeadException.new('Instance in terminated state!')
+        end
+        death_from_above_display = ::Proc.new do
+          "#<#{self.class}:TERMINATED>"
+        end
+        (
+          @_raw_instance.public_methods(false) +
+          @_raw_instance.protected_methods(false) +
+          @_raw_instance.private_methods(false)
+        ).each do |m_name|
+          @_raw_instance.send(:define_singleton_method, m_name, &death_from_above)
+        end
+        @_raw_instance.send(:define_singleton_method, :to_s, &death_from_above_display)
+        @_raw_instance.send(:define_singleton_method, :inspect, &death_from_above_display)
+        @_raw_threads[@_raw_instance.object_id].map do |thread|
+          thread.raise ::Zoidberg::DeadException.new('Instance in terminated state!')
+        end.map do |thread|
+          thread.join(2)
+        end.find_all(&:alive?).map(&:kill)
+        @_raw_threads.delete(@_raw_instance.object_id)
+        @_raw_instance.send(:define_singleton_method, :_zoidberg_destroyed, ::Proc.new{ true })
       end
-      death_from_above_display = ::Proc.new do
-        "#<#{self.class}:TERMINATED>"
-      end
-      (
-        @_raw_instance.public_methods(false) +
-        @_raw_instance.protected_methods(false) +
-        @_raw_instance.private_methods(false)
-      ).each do |m_name|
-        @_raw_instance.send(:define_singleton_method, m_name, &death_from_above)
-      end
-      @_raw_instance.send(:define_singleton_method, :to_s, &death_from_above_display)
-      @_raw_instance.send(:define_singleton_method, :inspect, &death_from_above_display)
-      @_raw_threads[@_raw_instance.object_id].map do |thread|
-        thread.raise ::Zoidberg::DeadException.new('Instance in terminated state!')
-      end.map do |thread|
-        thread.join(2)
-      end.find_all(&:alive?).map(&:kill)
-      @_raw_threads.delete(@_raw_instance.object_id)
       _zoidberg_signal(:destroyed)
       _release_lock!
       true
