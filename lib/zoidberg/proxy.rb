@@ -80,6 +80,13 @@ module Zoidberg
         if(defined?(Timeout) && e.is_a?(Timeout::Error))
           ::Kernel.raise e
         end
+        if(_zoidberg_link)
+          if(_zoidberg_link.class.trap_exit)
+            _zoidberg_link.async do
+              send(_zoidberg_link.class.trap_exit, @_raw_instance, error)
+            end
+          end
+        end
         if(@_supervised)
           _handle_unexpected_error(e)
         end
@@ -172,13 +179,6 @@ module Zoidberg
     # @param error [Exception] exception that was caught
     # @return [TrueClass]
     def _handle_unexpected_error(error)
-      if(_zoidberg_link)
-        if(_zoidberg_link.class.trap_exit)
-          _zoidberg_link.async do
-            send(_zoidberg_link.class.trap_exit, @_raw_instance, error)
-          end
-        end
-      end
       if(@_raw_instance.respond_to?(:restart))
         @_raw_instance.restart(error)
       else
