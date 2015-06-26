@@ -81,10 +81,12 @@ module Zoidberg
       #
       # @param unlocked [Truthy, Falsey] lock when running
       # @return [AsyncProxy, NilClass]
-      def async(unlocked=false)
+      def async(unlocked=false, &block)
         if(block_given?)
           if(unlocked)
-            thread = Thread.new(&block)
+            thread = Thread.new do
+              self.instance_exec(&block)
+            end
           else
             thread = Thread.new{ current_self.instance_exec(&block) }
           end
