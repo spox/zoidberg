@@ -85,9 +85,9 @@ module Zoidberg
         end
         if(_zoidberg_link)
           if(_zoidberg_link.class.trap_exit)
-            _zoidberg_link.async do
-              send(_zoidberg_link.class.trap_exit, @_raw_instance, error)
-            end
+            _zoidberg_link.async.send(
+              _zoidberg_link.class.trap_exit, @_raw_instance, e
+            )
           end
         end
         if(@_supervised)
