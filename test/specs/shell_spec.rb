@@ -242,4 +242,55 @@ describe Zoidberg::Shell do
 
   end
 
+  describe 'linking instances' do
+
+    let(:watcher) do
+      Class.new do
+        include Zoidberg::Shell
+
+        trap_exit :handle_error
+        attr_reader :instance, :error
+        def handle_error(instance, error)
+          @instance = instance
+          @error = error
+        end
+
+        def something_useful
+          :ohai
+        end
+      end
+    end
+
+    let(:boomer) do
+      Class.new do
+        include Zoidberg::Shell
+
+        def something_useful
+          :ohai
+        end
+
+        def something_not_useful
+          raise 'ACK'
+        end
+      end
+    end
+
+    it 'should allow linking instances' do
+      watch = watcher.new
+      boom = boomer.new
+      watch.link boom
+    end
+
+    it 'should execute linkage on error when not supervised' do
+      watch = watcher.new
+      boom = boomer.new
+      watch.link boom
+      ->{ boom.something_not_useful }.must_raise RuntimeError
+      sleep(0.1)
+      watch.instance.wont_be_nil
+      watch.error.wont_be_nil
+    end
+
+  end
+
 end
