@@ -51,12 +51,12 @@ module Zoidberg
     # @return [self]
     def initialize(klass, *args, &block)
       @_build_args = [klass, args, block]
-      @_raw_instance = klass.unshelled_new(*args, &block)
       @_lock = ::Mutex.new
       @_count_lock = ::Mutex.new
       @_locker = nil
       @_locker_count = 0
       @_zoidberg_signal = nil
+      @_raw_instance = klass.unshelled_new(*args, &block)
       @_raw_instance._zoidberg_proxy(self)
       @_raw_threads = ::Smash.new{ ::Array.new }
       if(@_raw_instance.class.ancestors.include?(::Zoidberg::Supervise))
