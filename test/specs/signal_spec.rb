@@ -54,4 +54,30 @@ describe Zoidberg::Signal do
     result.must_be_kind_of Float
   end
 
+  it 'should allow sending data on signal' do
+    sig = signal.new
+    Thread.new do
+      sleep(0.1)
+      sig.signal(:go, :ohai)
+    end
+    result = sig.wait_for(:go)
+    result.must_equal :ohai
+  end
+
+  it 'should allow sending data on broadcast' do
+    sig = signal.new
+    result = Queue.new
+    2.times do
+      Thread.new do
+        result.push sig.wait_for(:go)
+      end
+    end
+    sleep(0.1)
+    sig.broadcast(:go, :ohai)
+    sleep(0.1)
+    result.size.must_equal 2
+    result.pop.must_equal :ohai
+    result.pop.must_equal :ohai
+  end
+
 end
