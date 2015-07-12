@@ -5,6 +5,9 @@ module Zoidberg
   # Wait/send signals
   class Signal
 
+    # empty value when no object is provided
+    EMPTY_VALUE = :_zoidberg_empty_
+
     include Shell
 
     # @return [Smash] meta information on current waiters
@@ -20,10 +23,11 @@ module Zoidberg
     # Send a signal to _one_ waiter
     #
     # @param signal [Symbol] name of signal
+    # @param obj [Object] optional Object to send
     # @return [TrueClass, FalseClass] if signal was sent
-    def signal(signal)
+    def signal(signal, obj=EMPTY_VALUE)
       if(@waiters[signal]) # && !@waiters[signal][:threads].empty?)
-        @waiters[signal][:queue].push nil
+        @waiters[signal][:queue].push obj
         true
       else
         false
@@ -33,11 +37,12 @@ module Zoidberg
     # Send a signal to _all_ waiters
     #
     # @param signal [Symbol] name of signal
+    # @param obj [Object] optional Object to send
     # @return [TrueClass, FalseClass] if signal(s) was/were sent
-    def broadcast(signal)
+    def broadcast(signal, obj=EMPTY_VALUE)
       if(@waiters[signal]) # && !@waiters[signal][:threads].empty?)
         @waiters[signal][:threads].size.times do
-          @waiters[signal][:queue].push nil
+          @waiters[signal][:queue].push obj
         end
         true
       else
@@ -56,9 +61,9 @@ module Zoidberg
       )
       start_sleep = Time.now.to_f
       @waiters[signal][:threads].push(Thread.current)
-      defer{ @waiters[signal][:queue].pop }
+      val = defer{ @waiters[signal][:queue].pop }
       @waiters[signal][:threads].delete(Thread.current)
-      Time.now.to_f - start_sleep
+      val == EMPTY_VALUE ? (Time.now.to_f - start_sleep) : val
     end
 
   end
