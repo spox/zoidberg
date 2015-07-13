@@ -25,6 +25,43 @@ module Zoidberg
 
     module InstanceMethods
 
+      # Initialize the signal instance if not
+      def _zoidberg_signal_setup
+        unless(@_zoidberg_signal)
+          _zoidberg_proxy._aquire_lock!
+          @_instance_signal ||= ::Zoidberg::Signal.new
+          _zoidberg_proxy._release_lock!
+        end
+      end
+
+      def signal(name, arg=nil)
+        _zoidberg_signal_setup
+        if(arg)
+          @_instance_signal.signal(name, arg)
+        else
+          @_instance_signal.signal(name)
+        end
+      end
+
+      def broadcast(name, arg=nil)
+        _zoidberg_signal_setup
+        if(arg)
+          @_instance_signal.broadcast(name, arg)
+        else
+          @_instance_signal.broadcast(name)
+        end
+      end
+
+      def wait_for(name)
+        _zoidberg_signal_setup
+        defer{ @_instance_signal.wait_for(name) }
+      end
+      alias_method :wait, :wait_for
+
+      def alive?
+        !respond_to?(:_zoidberg_destroyed)
+      end
+
       # Provide access to the proxy instance from the real instance
       #
       # @param oxy [Zoidberg::Proxy]
@@ -54,7 +91,17 @@ module Zoidberg
       # @param length [Numeric, NilClass]
       # @return [Float]
       def sleep(length=nil)
-        defer do
+        if(current_actor._locker == ::Thread.current)
+          defer do
+            start_time = ::Time.now.to_f
+            if(length)
+              Kernel.sleep(length)
+            else
+              Kernel.sleep
+            end
+            ::Time.now.to_f - start_time
+          end
+        else
           start_time = ::Time.now.to_f
           if(length)
             Kernel.sleep(length)
@@ -81,7 +128,7 @@ module Zoidberg
       #
       # @param unlocked [Truthy, Falsey] lock when running
       # @return [AsyncProxy, NilClass]
-      def async(unlocked=false, &block)
+      def async(unlocked=true, &block)
         if(block_given?)
           if(unlocked)
             thread = Thread.new do
@@ -120,6 +167,11 @@ module Zoidberg
         weak_ref
       end
 
+      # Trap unhandled exceptions from linked instances and handle via
+      # given method name
+      #
+      # @param m_name [String, Symbol] method handler name
+      # @return [String, Symbol]
       def trap_exit(m_name=nil)
         if(m_name)
           @m_name = m_name
