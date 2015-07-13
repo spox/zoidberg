@@ -157,14 +157,14 @@ describe Zoidberg::Shell do
 
     it 'should act busy when locked async busy' do
       inst = klass.new
-      inst.async.act_busy
+      inst.async(:locked).act_busy
       sleep(0.01)
       inst._zoidberg_available?.must_equal false
     end
 
     it 'should not act busy when unlocked async busy' do
       inst = klass.new
-      inst.async(:unlocked).act_busy
+      inst.async.act_busy
       sleep(0.01)
       inst._zoidberg_available?.must_equal true
     end
