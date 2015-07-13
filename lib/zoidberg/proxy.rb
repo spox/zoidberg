@@ -53,6 +53,7 @@ module Zoidberg
       @_build_args = [klass, args, block]
       @_lock = ::Mutex.new
       @_count_lock = ::Mutex.new
+      @_accessing_threads = []
       @_locker = nil
       @_locker_count = 0
       @_zoidberg_signal = nil
@@ -66,6 +67,7 @@ module Zoidberg
 
     # Used to proxy request to real instance
     def method_missing(*args, &block)
+      @_accessing_threads << ::Thread.current
       begin
         _aquire_lock!
         res = nil
@@ -80,7 +82,7 @@ module Zoidberg
       rescue ::Zoidberg::Supervise::AbortException => e
         ::Kernel.raise e.original_exception
       rescue ::Exception => e
-        if(defined?(Timeout) && e.is_a?(Timeout::Error))
+        if((defined?(Timeout) && e.is_a?(Timeout::Error)) || e.is_a?(::Zoidberg::DeadException))
           ::Kernel.raise e
         end
         if(_zoidberg_link)
@@ -89,9 +91,10 @@ module Zoidberg
               _zoidberg_link.class.trap_exit, @_raw_instance, e
             )
           end
-        end
-        if(@_supervised)
-          _handle_unexpected_error(e)
+        else
+          if(@_supervised)
+            _zoidberg_handle_unexpected_error(e)
+          end
         end
         if(e.class.to_s == 'fatal' && !@_fatal_retry)
           @_fatal_retry = true
@@ -101,6 +104,8 @@ module Zoidberg
         end
       ensure
         _release_lock!
+        t_idx = @_accessing_threads.index(::Thread.current)
+        @_accessing_threads.delete_at(t_idx) if t_idx
       end
       res
     end
@@ -181,21 +186,21 @@ module Zoidberg
     #
     # @param error [Exception] exception that was caught
     # @return [TrueClass]
-    def _handle_unexpected_error(error)
+    def _zoidberg_handle_unexpected_error(error)
       if(@_raw_instance.respond_to?(:restart))
-        @_raw_instance.restart(error)
-      else
-        if(@_raw_instance.respond_to?(:terminate))
-          @_raw_instance.terminate
+        begin
+          @_raw_instance.restart(error)
+          return # short circuit
+        rescue => e
         end
-        _zoidberg_destroy!
-        args = _build_args.dup
-        @_raw_instance = args.shift.unshelled_new(
-          *args.first,
-          &args.last
-        )
-        @_raw_instance._zoidberg_proxy(self)
       end
+      _zoidberg_destroy!
+      args = _build_args.dup
+      @_raw_instance = args.shift.unshelled_new(
+        *args.first,
+        &args.last
+      )
+      @_raw_instance._zoidberg_proxy(self)
       true
     end
 
@@ -205,9 +210,15 @@ module Zoidberg
     # but can be used on its own if desired.
     #
     # @return [TrueClass]
-    def _zoidberg_destroy!
-      _aquire_lock!
+    def _zoidberg_destroy!(error=nil)
       unless(@_raw_instance.respond_to?(:_zoidberg_destroyed))
+        if(@_raw_instance.respond_to?(:terminate))
+          if(@_raw_instance.method(:terminate).arity == 0)
+            @_raw_instance.terminate
+          else
+            @_raw_instance.terminate(error)
+          end
+        end
         death_from_above = ::Proc.new do
           ::Kernel.raise ::Zoidberg::DeadException.new('Instance in terminated state!')
         end
@@ -219,6 +230,7 @@ module Zoidberg
           @_raw_instance.protected_methods(false) +
           @_raw_instance.private_methods(false)
         ).each do |m_name|
+          next if m_name.to_sym == :alive?
           @_raw_instance.send(:define_singleton_method, m_name, &death_from_above)
         end
         @_raw_instance.send(:define_singleton_method, :to_s, &death_from_above_display)
@@ -231,10 +243,19 @@ module Zoidberg
         @_raw_threads.delete(@_raw_instance.object_id)
         @_raw_instance.send(:define_singleton_method, :_zoidberg_destroyed, ::Proc.new{ true })
       end
+      @_accessing_threads.each do |thr|
+        if(thr.alive?)
+          begin
+            thr.raise ::Zoidberg::DeadException.new('Instance in terminated state!')
+          rescue
+          end
+        end
+      end
+      @_accessing_threads.clear
       _zoidberg_signal(:destroyed)
-      _release_lock!
       true
     end
+    alias_method :terminate, :_zoidberg_destroy!
 
     # @return [self]
     def _zoidberg_object
