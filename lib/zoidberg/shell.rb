@@ -126,11 +126,11 @@ module Zoidberg
 
       # Perform an async action
       #
-      # @param unlocked [Truthy, Falsey] lock when running
+      # @param locked [Truthy, Falsey] lock when running
       # @return [AsyncProxy, NilClass]
-      def async(unlocked=true, &block)
+      def async(locked=false, &block)
         if(block_given?)
-          if(unlocked)
+          unless(locked)
             thread = Thread.new do
               self.instance_exec(&block)
             end
@@ -140,7 +140,7 @@ module Zoidberg
           _zoidberg_thread(thread)
           nil
         else
-          AsyncProxy.new(unlocked ? self : current_self)
+          AsyncProxy.new(locked ? current_self : self)
         end
       end
 
