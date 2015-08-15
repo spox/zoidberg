@@ -45,7 +45,7 @@ module Zoidberg
     # @yieldblock initialization block
     # @return [Object] new pool
     def pool(klass, args={}, &block)
-      name = args[:name]
+      name = args[:as]
       size = args[:size].to_i
       args = args.fetch(:args, [])
       klass = supervised_class(klass)

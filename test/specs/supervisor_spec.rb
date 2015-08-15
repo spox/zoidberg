@@ -84,33 +84,33 @@ describe Zoidberg::Supervisor do
 
     it 'should supervise a pool' do
       supervisor = Zoidberg::Supervisor.new
-      supervisor.pool klass, :name => :fubar
+      supervisor.pool klass, :as => :fubar
       supervisor[:fubar].foobar.must_equal 'fubar'
       supervisor[:fubar]._worker_count.must_equal 1
     end
 
     it 'should supervise a multi-instance pool' do
       supervisor = Zoidberg::Supervisor.new
-      supervisor.pool klass, :name => :fubar, :size => 3
+      supervisor.pool klass, :as => :fubar, :size => 3
       supervisor[:fubar].foobar.must_equal 'fubar'
       supervisor[:fubar]._worker_count.must_equal 3
     end
 
     it 'should accept init argument' do
       supervisor = Zoidberg::Supervisor.new
-      supervisor.pool klass_arg, :name => :fubar, :args => ['fubar']
+      supervisor.pool klass_arg, :as => :fubar, :args => ['fubar']
       supervisor[:fubar].arg.must_equal 'fubar'
     end
 
     it 'should accept init block' do
       supervisor = Zoidberg::Supervisor.new
-      supervisor.pool(klass_block, :name => :fubar){ 'fubar' }
+      supervisor.pool(klass_block, :as => :fubar){ 'fubar' }
       supervisor[:fubar].blk.call.must_equal 'fubar'
     end
 
     it 'should accept init arg and block' do
       supervisor = Zoidberg::Supervisor.new
-      supervisor.pool(klass_arg_block, :name => :fubar, :args => ['foobar']){ 'fubar' }
+      supervisor.pool(klass_arg_block, :as => :fubar, :args => ['foobar']){ 'fubar' }
       supervisor[:fubar].arg.must_equal 'foobar'
       supervisor[:fubar].blk.call.must_equal 'fubar'
     end
