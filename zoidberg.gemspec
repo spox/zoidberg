@@ -11,6 +11,7 @@ Gem::Specification.new do |s|
   s.require_path = 'lib'
   s.license = 'Apache 2.0'
   s.add_runtime_dependency 'bogo'
+  s.add_runtime_dependency 'mono_logger'
   s.add_development_dependency 'pry'
   s.add_development_dependency 'minitest'
   s.files = Dir['lib/**/*'] + %w(zoidberg.gemspec README.md CHANGELOG.md CONTRIBUTING.md LICENSE)
