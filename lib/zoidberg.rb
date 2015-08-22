@@ -39,4 +39,4 @@ module Zoidberg
 end
 
 # Always enable default logger
-Zoidberg.logger = Zoidberg::Logger.new(STDOUT)
+Zoidberg.logger = Zoidberg::Logger.new(STDERR)
