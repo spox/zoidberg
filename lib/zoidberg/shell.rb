@@ -17,7 +17,13 @@ module Zoidberg
       end
       def method_missing(*args, &block)
         target._zoidberg_thread(
-          Thread.new{ target.send(*args, &block) }
+          Thread.new{
+            begin
+              target.send(*args, &block)
+            rescue Exception => e
+              target._zoidberg_proxy.send(:raise, e)
+            end
+          }
         )
         nil
       end
