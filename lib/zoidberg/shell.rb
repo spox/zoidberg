@@ -6,9 +6,8 @@ module Zoidberg
   class DeadException < RuntimeError
   end
 
-  # Provides a wrapping around a real instance. Including this module
-  # within a class will enable magic.
-  module Shell
+  # Librated proxy based shell
+  module SoftShell
 
     class AsyncProxy
       attr_reader :target
@@ -28,6 +27,168 @@ module Zoidberg
         nil
       end
     end
+
+    # Unlock current lock on instance and execute given block
+    # without locking
+    #
+    # @yield block to execute without lock
+    # @return [Object] result of block
+    def defer
+      _zoidberg_proxy._release_lock!
+      result = yield if block_given?
+      _zoidberg_proxy._aquire_lock!
+      result
+    end
+
+    # Perform an async action
+    #
+    # @param locked [Truthy, Falsey] lock when running
+    # @return [AsyncProxy, NilClass]
+    def async(locked=false, &block)
+      if(block_given?)
+        unless(locked)
+          thread = Thread.new do
+            self.instance_exec(&block)
+          end
+        else
+          thread = Thread.new{ current_self.instance_exec(&block) }
+        end
+        _zoidberg_thread(thread)
+        nil
+      else
+        ::Zoidberg::SoftShell::AsyncProxy.new(locked ? current_self : self)
+      end
+    end
+
+    # Register a running thread for this instance. Registered
+    # threads are tracked and killed on cleanup
+    #
+    # @param thread [Thread]
+    # @return [TrueClass]
+    def _zoidberg_thread(thread)
+      _zoidberg_proxy._raw_threads[self.object_id].push(thread)
+      true
+    end
+
+    # Provide a customized sleep behavior which will unlock the real
+    # instance while sleeping
+    #
+    # @param length [Numeric, NilClass]
+    # @return [Float]
+    def sleep(length=nil)
+      if(current_actor._locker == ::Thread.current)
+        defer do
+          start_time = ::Time.now.to_f
+          if(length)
+            Kernel.sleep(length)
+          else
+            Kernel.sleep
+          end
+          ::Time.now.to_f - start_time
+        end
+      else
+        start_time = ::Time.now.to_f
+        if(length)
+          Kernel.sleep(length)
+        else
+          Kernel.sleep
+        end
+        ::Time.now.to_f - start_time
+      end
+    end
+
+    def self.included(klass)
+      unless(klass.include?(::Zoidberg::Shell))
+        klass.class_eval do
+          include ::Zoidberg::Shell
+        end
+      end
+    end
+
+  end
+
+  # Confined proxy based shell
+  module HardShell
+
+    class AsyncProxy
+      attr_reader :target
+      def initialize(instance)
+        @target = instance
+      end
+      def method_missing(*args, &block)
+        target.async(*args, &block)
+        nil
+      end
+    end
+
+    # Unlock current lock on instance and execute given block
+    # without locking
+    #
+    # @yield block to execute without lock
+    # @return [Object] result of block
+    def defer(&block)
+      if(block_given?)
+        Fiber.new(&block).resume
+      end
+    end
+
+    # Perform an async action
+    #
+    # @param locked [Truthy, Falsey] lock when running
+    # @return [AsyncProxy, NilClass]
+    def async(locked=false, &block)
+      if(block_given?)
+        if(locked)
+          current_self.instance_exec(&block)
+        else
+          current_self.async(:instance_exec, &block)
+        end
+        nil
+      else
+        ::Zoidberg::HardShell::AsyncProxy.new(locked ? current_self : self)
+      end
+    end
+
+    # Provide a customized sleep behavior which will unlock the real
+    # instance while sleeping
+    #
+    # @param length [Numeric, NilClass]
+    # @return [Float]
+    def sleep(length=nil)
+      if(current_actor._locker == ::Thread.current)
+        defer do
+          start_time = ::Time.now.to_f
+          if(length)
+            Kernel.sleep(length)
+          else
+            Thread.current[:root_fiber] == Fiber.current ? Kernel.sleep : Fiber.yield
+          end
+          ::Time.now.to_f - start_time
+        end
+      else
+        start_time = ::Time.now.to_f
+        if(length)
+          Kernel.sleep(length)
+        else
+          Thread.current[:root_fiber] == Fiber.current ? Kernel.sleep : Fiber.yield
+        end
+        ::Time.now.to_f - start_time
+      end
+    end
+
+    def self.included(klass)
+      unless(klass.include?(::Zoidberg::Shell))
+        klass.class_eval do
+          include ::Zoidberg::Shell
+        end
+      end
+    end
+
+  end
+
+  # Provides a wrapping around a real instance. Including this module
+  # within a class will enable magic.
+  module Shell
 
     module InstanceMethods
 
@@ -81,75 +242,6 @@ module Zoidberg
       alias_method :current_self, :_zoidberg_proxy
       alias_method :current_actor, :_zoidberg_proxy
 
-      # Register a running thread for this instance. Registered
-      # threads are tracked and killed on cleanup
-      #
-      # @param thread [Thread]
-      # @return [TrueClass]
-      def _zoidberg_thread(thread)
-        _zoidberg_proxy._raw_threads[self.object_id].push(thread)
-        true
-      end
-
-      # Provide a customized sleep behavior which will unlock the real
-      # instance while sleeping
-      #
-      # @param length [Numeric, NilClass]
-      # @return [Float]
-      def sleep(length=nil)
-        if(current_actor._locker == ::Thread.current)
-          defer do
-            start_time = ::Time.now.to_f
-            if(length)
-              Kernel.sleep(length)
-            else
-              Kernel.sleep
-            end
-            ::Time.now.to_f - start_time
-          end
-        else
-          start_time = ::Time.now.to_f
-          if(length)
-            Kernel.sleep(length)
-          else
-            Kernel.sleep
-          end
-          ::Time.now.to_f - start_time
-        end
-      end
-
-      # Unlock current lock on instance and execute given block
-      # without locking
-      #
-      # @yield block to execute without lock
-      # @return [Object] result of block
-      def defer
-        _zoidberg_proxy._release_lock!
-        result = yield if block_given?
-        _zoidberg_proxy._aquire_lock!
-        result
-      end
-
-      # Perform an async action
-      #
-      # @param locked [Truthy, Falsey] lock when running
-      # @return [AsyncProxy, NilClass]
-      def async(locked=false, &block)
-        if(block_given?)
-          unless(locked)
-            thread = Thread.new do
-              self.instance_exec(&block)
-            end
-          else
-            thread = Thread.new{ current_self.instance_exec(&block) }
-          end
-          _zoidberg_thread(thread)
-          nil
-        else
-          AsyncProxy.new(locked ? current_self : self)
-        end
-      end
-
       # Link given shelled instance to current shelled instance to
       # handle any exceptions raised from async actions
       #
@@ -166,7 +258,13 @@ module Zoidberg
 
       # Override real instance's .new method to provide a proxy instance
       def new(*args, &block)
-        proxy = Zoidberg::Proxy.new(self, *args, &block)
+        if(self.include?(Zoidberg::HardShell))
+          proxy = Zoidberg::Proxy::Confined.new(self, *args, &block)
+        elsif(self.include?(Zoidberg::SoftShell))
+          proxy = Zoidberg::Proxy::Liberated.new(self, *args, &block)
+        else
+          raise "OMG WTF"
+        end
         weak_ref = Zoidberg::WeakRef.new(proxy)
         Zoidberg::Proxy.register(weak_ref.__id__, proxy)
         ObjectSpace.define_finalizer(weak_ref, Zoidberg::Proxy.method(:scrub!))
@@ -200,6 +298,11 @@ module Zoidberg
 
           include InstanceMethods
           extend ClassMethods
+        end
+      end
+      unless(klass.include?(SoftShell) || klass.include?(HardShell))
+        klass.class_eval do
+          include SoftShell
         end
       end
     end

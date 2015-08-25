@@ -11,9 +11,12 @@ module Zoidberg
   autoload :Proxy, 'zoidberg/proxy'
   autoload :Registry, 'zoidberg/registry'
   autoload :Shell, 'zoidberg/shell'
+  autoload :SoftShell, 'zoidberg/shell'
+  autoload :HardShell, 'zoidberg/shell'
   autoload :Signal, 'zoidberg/signal'
   autoload :Supervise, 'zoidberg/supervise'
   autoload :Supervisor, 'zoidberg/supervisor'
+  autoload :Task, 'zoidberg/task'
   autoload :WeakRef, 'zoidberg/weak_ref'
 
   class << self
