@@ -39,7 +39,7 @@ module Zoidberg
       def _async_request(blocking, method_name, *args, &block)
         ::Zoidberg.logger.debug "Received async request from remote thread. Added to queue: #{_raw_instance.class}##{method_name}(#{args.map(&:inspect).join(', ')})"
         _requests << ::Smash.new(
-          :uuid => ::SecureRandom.uuid,
+          :uuid => ::Zoidberg.uuid,
           :arguments => [method_name, *args],
           :block => block,
           :response => nil,
@@ -88,7 +88,7 @@ module Zoidberg
           ::Zoidberg.logger.debug "Received request from remote thread. Added to queue: #{_raw_instance.class}##{method_name}(#{args.map(&:inspect).join(', ')})"
           response_queue = ::Queue.new
           _requests << ::Smash.new(
-            :uuid => ::SecureRandom.uuid,
+            :uuid => ::Zoidberg.uuid,
             :arguments => [method_name, *args],
             :block => block,
             :response => response_queue

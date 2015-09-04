@@ -1,5 +1,6 @@
 require 'bogo'
 require 'thread'
+require 'securerandom'
 require 'zoidberg/version'
 
 # Why not Zoidberg!?
@@ -37,6 +38,11 @@ module Zoidberg
         raise TypeError.new "Expecting type `Zoidberg::Logger` but received type `#{log.class}`"
       end
       @zoidberg_logger = log
+    end
+
+    # @return [String] UUID
+    def uuid
+      SecureRandom.uuid
     end
 
   end
