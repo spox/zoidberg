@@ -3,8 +3,7 @@ require 'zoidberg'
 module Zoidberg
 
   # Customized exception type used when instance has been terminated
-  class DeadException < RuntimeError
-  end
+  class DeadException < RuntimeError; end
 
   # Librated proxy based shell
   module SoftShell
@@ -76,7 +75,7 @@ module Zoidberg
     # @param length [Numeric, NilClass]
     # @return [Float]
     def sleep(length=nil)
-      if(current_actor._locker == ::Thread.current)
+      if(_zoidberg_proxy._locker == ::Thread.current)
         defer do
           start_time = ::Time.now.to_f
           if(length)
