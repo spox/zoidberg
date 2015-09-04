@@ -37,7 +37,7 @@ module Zoidberg
           _aquire_lock!
           if(::ENV['ZOIDBERG_TESTING'])
             ::Kernel.require 'timeout'
-            ::Timeout.timeout(20) do
+            ::Timeout.timeout(::ENV.fetch('ZOIDBERG_TESTING_TIMEOUT', 5).to_i) do
               res = @_raw_instance.__send__(*args, &block)
             end
           else
@@ -46,23 +46,8 @@ module Zoidberg
         rescue ::Zoidberg::Supervise::AbortException => e
           ::Kernel.raise e.original_exception
         rescue ::Exception => e
-          ::Zoidberg.logger.error "Unexpected exception: #{e.class} - #{e}"
-          if((defined?(Timeout) && e.is_a?(Timeout::Error)) || e.is_a?(::Zoidberg::DeadException))
-            ::Kernel.raise e
-          end
-          if(_zoidberg_link)
-            if(_zoidberg_link.class.trap_exit)
-              ::Zoidberg.logger.warn "Calling linked exit trapper #{@_raw_instance.class} -> #{_zoidberg_link.class}: #{e.class} - #{e}"
-              _zoidberg_link.async.send(
-                _zoidberg_link.class.trap_exit, @_raw_instance, e
-              )
-            end
-          else
-            if(@_supervised)
-              ::Zoidberg.logger.warn "Unexpected error for supervised class `#{@_raw_instance.class}`. Handling error (#{e.class} - #{e})"
-              _zoidberg_handle_unexpected_error(e)
-            end
-          end
+          _zoidberg_unexpected_error(e)
+          ::Zoidberg.logger.debug "Exception on: #{_raw_instance.class}##{args.first}(#{args.slice(1, args.size).map(&:inspect).join(', ')})"
           if(e.class.to_s == 'fatal' && !@_fatal_retry)
             @_fatal_retry = true
             retry

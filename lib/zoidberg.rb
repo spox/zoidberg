@@ -21,6 +21,8 @@ module Zoidberg
 
   class << self
 
+    attr_accessor :default_shell
+
     # @return [Zoidberg::Logger]
     def logger
       @zoidberg_logger
@@ -43,3 +45,5 @@ end
 
 # Always enable default logger
 Zoidberg.logger = Zoidberg::Logger.new(STDERR)
+# Set default shell to soft shell
+Zoidberg.default_shell = Zoidberg::SoftShell

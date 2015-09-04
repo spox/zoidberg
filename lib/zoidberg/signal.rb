@@ -8,7 +8,7 @@ module Zoidberg
     # empty value when no object is provided
     EMPTY_VALUE = :_zoidberg_empty_
 
-    include Shell
+    include SoftShell
 
     # @return [Smash] meta information on current waiters
     attr_reader :waiters

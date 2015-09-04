@@ -51,23 +51,27 @@ module Zoidberg
       if(style == :async)
         task.kill
       else
-        raise TypeError.new('Cannot halt `:serial` tasks. Only `:async` tasks may be halted!')
+        @task = nil
       end
     end
 
     # @return [TrueClass, FalseClass] task currently waiting to run
     def waiting?
-      task.alive? && task.respond_to?(:stop?) ? task.stop? : true
+      task && task.alive? && task.respond_to?(:stop?) ? task.stop? : true
     end
 
     # @return [TrueClass, FalseClass] task is running
     def running?
-      style == :async && task.alive? && !task.stop?
+      if(task)
+        style == :async && task.alive? && !task.stop?
+      else
+        false
+      end
     end
 
     # @return [TrueClass, FalseClass] task is complete
     def complete?
-      !task.alive?
+      task.nil? || !task.alive?
     end
 
     # @return [TrueClass, FalseClass] task complete in error state

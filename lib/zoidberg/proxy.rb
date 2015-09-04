@@ -94,6 +94,28 @@ module Zoidberg
       end
     end
 
+    # Properly handle an unexpected exception when encountered
+    #
+    # @param e [Exception]
+    def _zoidberg_unexpected_error(e)
+      ::Zoidberg.logger.error "Unexpected exception: #{e.class} - #{e}"
+      unless((defined?(Timeout) && e.is_a?(Timeout::Error)) || e.is_a?(::Zoidberg::DeadException))
+        if(_zoidberg_link)
+          if(_zoidberg_link.class.trap_exit)
+            ::Zoidberg.logger.warn "Calling linked exit trapper #{@_raw_instance.class} -> #{_zoidberg_link.class}: #{e.class} - #{e}"
+            _zoidberg_link.async.send(
+              _zoidberg_link.class.trap_exit, @_raw_instance, e
+            )
+          end
+        else
+          if(@_supervised)
+            ::Zoidberg.logger.warn "Unexpected error for supervised class `#{@_raw_instance.class}`. Handling error (#{e.class} - #{e})"
+            _zoidberg_handle_unexpected_error(e)
+          end
+        end
+      end
+    end
+
     # When real instance is being supervised, unexpected exceptions
     # will force the real instance to be terminated and replaced with
     # a fresh instance. If the real instance provides a #restart

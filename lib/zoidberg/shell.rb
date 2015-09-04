@@ -47,11 +47,11 @@ module Zoidberg
     def async(locked=false, &block)
       if(block_given?)
         unless(locked)
-          thread = Thread.new do
+          thread = ::Thread.new do
             self.instance_exec(&block)
           end
         else
-          thread = Thread.new{ current_self.instance_exec(&block) }
+          thread = ::Thread.new{ current_self.instance_exec(&block) }
         end
         _zoidberg_thread(thread)
         nil
@@ -80,18 +80,18 @@ module Zoidberg
         defer do
           start_time = ::Time.now.to_f
           if(length)
-            Kernel.sleep(length)
+            ::Kernel.sleep(length)
           else
-            Kernel.sleep
+            ::Kernel.sleep
           end
           ::Time.now.to_f - start_time
         end
       else
         start_time = ::Time.now.to_f
         if(length)
-          Kernel.sleep(length)
+          ::Kernel.sleep(length)
         else
-          Kernel.sleep
+          ::Kernel.sleep
         end
         ::Time.now.to_f - start_time
       end
@@ -111,12 +111,13 @@ module Zoidberg
   module HardShell
 
     class AsyncProxy
-      attr_reader :target
-      def initialize(instance)
+      attr_reader :target, :locked
+      def initialize(instance, locked)
         @target = instance
+        @locked = locked
       end
       def method_missing(*args, &block)
-        target.async(*args, &block)
+        target._async_request(locked ? :blocking : :nonblocking, *args, &block)
         nil
       end
     end
@@ -127,8 +128,9 @@ module Zoidberg
     # @yield block to execute without lock
     # @return [Object] result of block
     def defer(&block)
-      if(block_given?)
-        Fiber.new(&block).resume
+      Fiber.yield
+      if(block)
+        ::Fiber.new(&block).resume
       end
     end
 
@@ -137,15 +139,14 @@ module Zoidberg
     # @param locked [Truthy, Falsey] lock when running
     # @return [AsyncProxy, NilClass]
     def async(locked=false, &block)
-      if(block_given?)
+      if(block)
         if(locked)
           current_self.instance_exec(&block)
         else
-          current_self.async(:instance_exec, &block)
+          current_self._async_request(locked ? :blocking : :nonblocking, :instance_exec, &block)
         end
-        nil
       else
-        ::Zoidberg::HardShell::AsyncProxy.new(locked ? current_self : self)
+        ::Zoidberg::HardShell::AsyncProxy.new(current_self, locked)
       end
     end
 
@@ -155,25 +156,13 @@ module Zoidberg
     # @param length [Numeric, NilClass]
     # @return [Float]
     def sleep(length=nil)
-      if(current_actor._locker == ::Thread.current)
-        defer do
-          start_time = ::Time.now.to_f
-          if(length)
-            Kernel.sleep(length)
-          else
-            Thread.current[:root_fiber] == Fiber.current ? Kernel.sleep : Fiber.yield
-          end
-          ::Time.now.to_f - start_time
-        end
+      start_time = ::Time.now.to_f
+      if(length)
+        ::Kernel.sleep(length)
       else
-        start_time = ::Time.now.to_f
-        if(length)
-          Kernel.sleep(length)
-        else
-          Thread.current[:root_fiber] == Fiber.current ? Kernel.sleep : Fiber.yield
-        end
-        ::Time.now.to_f - start_time
+        ::Thread.current[:root_fiber] == ::Fiber.current ? ::Kernel.sleep : ::Fiber.yield
       end
+      ::Time.now.to_f - start_time
     end
 
     def self.included(klass)
@@ -263,7 +252,7 @@ module Zoidberg
         elsif(self.include?(Zoidberg::SoftShell))
           proxy = Zoidberg::Proxy::Liberated.new(self, *args, &block)
         else
-          raise "OMG WTF"
+          raise TypeError.new "Unable to determine `Shell` type for this class `#{self}`!"
         end
         weak_ref = Zoidberg::WeakRef.new(proxy)
         Zoidberg::Proxy.register(weak_ref.__id__, proxy)
@@ -302,7 +291,7 @@ module Zoidberg
       end
       unless(klass.include?(SoftShell) || klass.include?(HardShell))
         klass.class_eval do
-          include SoftShell
+          include Zoidberg.default_shell
         end
       end
     end
