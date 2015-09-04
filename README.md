@@ -121,3 +121,31 @@ So this is pretty neat. We had a class that was shown to not be thread
 safe. We tossed a module into that class. Now that class is thread safe.
 
 ## Features
+
+### Implicit Locking
+
+Zoidberg automatically synchronizes requests made to an instance. This
+behavior can be short circuited if the actual instance creates a thread
+and calls a method on itself. Otherwise, all external access to the
+instance will be automatically synchronized. Nifty.
+
+### Supervision
+
+Zoidberg provides lazy supervision. There is no single supervisor. Instead
+supervision is handled by the proxy which wraps the class. Failure of an
+instance will result in termination + reinstantiation. When externally
+accessing the instance nothing requires modification.
+
+### Pools
+
+Zoidberg allows pooling lazy supervised instances. Unexpected failures will
+cause the instance to be terminated and re-initialized as usual. The pool
+will deliver requests to free instances, or queue them until a free instance
+is available.
+
+### Garbage Collection
+
+Garbage collection happens as usual with Zoidberg. When an instance is created
+the result may look like the instance but really it is proxy wrapping the
+raw instance. When the proxy falls out of scope and is garbage collected the
+raw instance it wrapped will also fall out of scope and be garbage collected.
