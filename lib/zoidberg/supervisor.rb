@@ -62,9 +62,11 @@ module Zoidberg
     # @return [Class]
     def supervised_class(klass)
       unless(klass.include?(Zoidberg::Supervise))
-        klass = Class.new(klass) do
+        n_klass = Class.new(klass) do
           include Zoidberg::Supervise
         end
+        n_klass.class_eval("def self.name; '#{klass.name}'; end")
+        klass = n_klass
       end
       klass
     end
