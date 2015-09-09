@@ -26,12 +26,9 @@ module Zoidberg
     # @param obj [Object] optional Object to send
     # @return [TrueClass, FalseClass] if signal was sent
     def signal(signal, obj=EMPTY_VALUE)
-      if(@waiters[signal]) # && !@waiters[signal][:threads].empty?)
-        @waiters[signal][:queue].push obj
-        true
-      else
-        false
-      end
+      signal_init(signal)
+      @waiters[signal][:queue].push obj
+      true
     end
 
     # Send a signal to _all_ waiters
@@ -55,15 +52,30 @@ module Zoidberg
     # @param signal [Symbol] name of signal
     # @return [Float] number of seconds waiting for signal
     def wait_for(signal)
-      @waiters[signal] ||= Smash.new(
-        :queue => Queue.new,
-        :threads => []
-      )
+      signal_init(signal)
       start_sleep = Time.now.to_f
       @waiters[signal][:threads].push(Thread.current)
       val = defer{ @waiters[signal][:queue].pop }
       @waiters[signal][:threads].delete(Thread.current)
       val == EMPTY_VALUE ? (Time.now.to_f - start_sleep) : val
+    end
+
+    protected
+
+    # Initialize the signal structure data
+    #
+    # @param name [String, Symbol] name of signal
+    # @return [TrueClass, FalseClass]
+    def signal_init(name)
+      unless(@waiters[name])
+        @waiters[name] = Smash.new(
+          :queue => Queue.new,
+          :threads => []
+        )
+        true
+      else
+        false
+      end
     end
 
   end
