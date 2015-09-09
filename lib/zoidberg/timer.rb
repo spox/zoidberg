@@ -154,6 +154,7 @@ module Zoidberg
     def run!
       loop do
         begin
+          # TODO: update with select for better subsecond support
           sleep _zoidberg_proxy.next_interval
           notify_locker.synchronize do
             _zoidberg_proxy.run_ready
