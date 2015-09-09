@@ -102,14 +102,14 @@ module Zoidberg
       unless((defined?(Timeout) && e.is_a?(Timeout::Error)) || e.is_a?(::Zoidberg::DeadException))
         if(_zoidberg_link)
           if(_zoidberg_link.class.trap_exit)
-            ::Zoidberg.logger.warn "Calling linked exit trapper #{@_raw_instance.class} -> #{_zoidberg_link.class}: #{e.class} - #{e}"
+            ::Zoidberg.logger.warn "Calling linked exit trapper #{@_raw_instance.class.name} -> #{_zoidberg_link.class}: #{e.class} - #{e}"
             _zoidberg_link.async.send(
               _zoidberg_link.class.trap_exit, @_raw_instance, e
             )
           end
         else
           if(@_supervised)
-            ::Zoidberg.logger.warn "Unexpected error for supervised class `#{@_raw_instance.class}`. Handling error (#{e.class} - #{e})"
+            ::Zoidberg.logger.warn "Unexpected error for supervised class `#{@_raw_instance.class.name}`. Handling error (#{e.class} - #{e})"
             _zoidberg_handle_unexpected_error(e)
           end
         end
@@ -133,12 +133,14 @@ module Zoidberg
         end
       end
       _zoidberg_destroy!
+      _aquire_lock!
       args = _build_args.dup
       @_raw_instance = args.shift.unshelled_new(
         *args.first,
         &args.last
       )
       _raw_instance._zoidberg_proxy(self)
+      _release_lock!
       true
     end
 
@@ -148,7 +150,7 @@ module Zoidberg
     # but can be used on its own if desired.
     #
     # @return [TrueClass]
-    def _zoidberg_destroy!(error=nil)
+    def _zoidberg_destroy!(error=nil, &block)
       unless(_raw_instance.respond_to?(:_zoidberg_destroyed))
         if(_raw_instance.respond_to?(:terminate))
           if(_raw_instance.method(:terminate).arity == 0)
@@ -161,9 +163,12 @@ module Zoidberg
           ::Kernel.raise ::Zoidberg::DeadException.new('Instance in terminated state!')
         end
         death_from_above_display = ::Proc.new do
-          "#<#{self.class}:TERMINATED>"
+          "#<#{self.class.name}:TERMINATED>"
         end
-        yield if block_given?
+        block.call if block
+        _raw_instance.instance_variables.each do |i_var|
+          _raw_instance.remove_instance_variable(i_var)
+        end
         (
           _raw_instance.public_methods(false) +
           _raw_instance.protected_methods(false) +
