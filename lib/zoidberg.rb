@@ -18,6 +18,7 @@ module Zoidberg
   autoload :Supervise, 'zoidberg/supervise'
   autoload :Supervisor, 'zoidberg/supervisor'
   autoload :Task, 'zoidberg/task'
+  autoload :Timer, 'zoidberg/timer'
   autoload :WeakRef, 'zoidberg/weak_ref'
 
   class << self
