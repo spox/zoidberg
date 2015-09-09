@@ -54,6 +54,13 @@ module Zoidberg
       registry[name] = s_pool
     end
 
+    # Destroy all supervised instances prior to destruction
+    def terminate
+      registry.values.each do |item|
+        item._zoidberg_destroy!
+      end
+    end
+
     protected
 
     # Make a supervised class
