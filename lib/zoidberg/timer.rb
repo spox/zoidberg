@@ -131,7 +131,13 @@ module Zoidberg
         items.include?(item)
       end
       items.map do |item|
-        item[:action].call
+        begin
+          item[:action].call
+        rescue DeadException
+          item[:recur] = false
+        rescue => e
+          Zoidberg.logger.error "<#{self}> Timed action generated an error: #{e.class.name} - #{e}"
+        end
         if(item[:recur])
           item[:last_run] = Time.now.to_f
           item
@@ -158,8 +164,9 @@ module Zoidberg
         rescue DeadException
           raise
         rescue => e
-          Zoidberg.logger.error "<#{self}> Timed action generated an error: #{e.class.name} - #{e}"
+          Zoidberg.logger.error "<#{self}> Unexpected error in runner: #{e.class.name} - #{e}"
           Zoidberg.logger.debug "<#{self}> #{e.class.name}: #{e}\n#{e.backtrace.join("\n")}"
+          current_self.raise e
         end
       end
     end
