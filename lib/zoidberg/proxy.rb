@@ -110,6 +110,7 @@ module Zoidberg
         else
           if(@_supervised)
             ::Zoidberg.logger.warn "Unexpected error for supervised class `#{@_raw_instance.class.name}`. Handling error (#{e.class} - #{e})"
+            ::Zoidberg.logger.debug "#{e.class}: #{e}\n#{e.backtrace.join("\n")}"
             _zoidberg_handle_unexpected_error(e)
           end
         end
