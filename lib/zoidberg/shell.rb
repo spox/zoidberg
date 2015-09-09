@@ -34,9 +34,14 @@ module Zoidberg
     # @return [Object] result of block
     def defer
       _zoidberg_proxy._release_lock!
-      result = yield if block_given?
-      _zoidberg_proxy._aquire_lock!
-      result
+      begin
+        result = yield if block_given?
+        _zoidberg_proxy._aquire_lock!
+        result
+      rescue Exception => e
+        _zoidberg_proxy._aquire_lock!
+        raise e
+      end
     end
 
     # Perform an async action
@@ -181,38 +186,64 @@ module Zoidberg
     module InstanceMethods
 
       # Initialize the signal instance if not
-      def _zoidberg_signal_setup
-        unless(@_zoidberg_signal)
-          _zoidberg_proxy._aquire_lock!
-          @_instance_signal ||= ::Zoidberg::Signal.new
-          _zoidberg_proxy._release_lock!
+      def _zoidberg_signal
+        memoize(:signal) do
+          ::Zoidberg::Signal.new
         end
       end
 
+      # @return [Timer]
+      def timer
+        memoize(:timer) do
+          Timer.new
+        end
+      end
+
+      # Register a recurring action
+      #
+      # @param interval [Numeric]
+      # @yield action to run
+      # @return [Timer]
+      def every(interval, &block)
+        timer.every(interval, &block)
+      end
+
+      # Register an action to run after interval
+      #
+      # @param interval [Numeric]
+      # @yield action to run
+      # @return [Timer]
+      def after(interval, &block)
+        timer.after(interval, &block)
+      end
+
+      # Send a signal to single waiter
+      #
+      # @param name [String, Symbol] name of signal
+      # @param arg [Object] optional argument to transmit
+      # @return [TrueClass, FalseClass]
       def signal(name, arg=nil)
-        _zoidberg_signal_setup
-        if(arg)
-          @_instance_signal.signal(name, arg)
-        else
-          @_instance_signal.signal(name)
-        end
+        _zoidberg_signal.signal(*[name, arg].compact)
       end
 
+      # Broadcast a signal to all waiters
+      # @param name [String, Symbol] name of signal
+      # @param arg [Object] optional argument to transmit
+      # @return [TrueClass, FalseClass]
       def broadcast(name, arg=nil)
-        _zoidberg_signal_setup
-        if(arg)
-          @_instance_signal.broadcast(name, arg)
-        else
-          @_instance_signal.broadcast(name)
-        end
+        _zoidberg_signal.broadcast(*[name, arg].compact)
       end
 
+      # Wait for a given signal
+      #
+      # @param name [String, Symbol] name of signal
+      # @return [Object]
       def wait_for(name)
-        _zoidberg_signal_setup
-        defer{ @_instance_signal.wait_for(name) }
+        defer{ _zoidberg_signal.wait_for(name) }
       end
       alias_method :wait, :wait_for
 
+      # @return [TrueClass, FalseClass]
       def alive?
         !respond_to?(:_zoidberg_destroyed)
       end
@@ -286,6 +317,7 @@ module Zoidberg
 
           include InstanceMethods
           extend ClassMethods
+          include Bogo::Memoization
         end
       end
       unless(klass.include?(SoftShell) || klass.include?(HardShell))
