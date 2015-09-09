@@ -91,5 +91,10 @@ module Zoidberg
       worker
     end
 
+    # Force termination of all workers when terminated
+    def terminate
+      @_workers.map(&:_zoidberg_destroy!)
+    end
+
   end
 end
