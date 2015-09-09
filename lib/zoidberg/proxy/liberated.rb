@@ -46,8 +46,8 @@ module Zoidberg
         rescue ::Zoidberg::Supervise::AbortException => e
           ::Kernel.raise e.original_exception
         rescue ::Exception => e
+          ::Zoidberg.logger.debug "Exception on: #{_raw_instance.class.name}##{args.first}(#{args.slice(1, args.size).map(&:inspect).join(', ')})"
           _zoidberg_unexpected_error(e)
-          ::Zoidberg.logger.debug "Exception on: #{_raw_instance.class}##{args.first}(#{args.slice(1, args.size).map(&:inspect).join(', ')})"
           if(e.class.to_s == 'fatal' && !@_fatal_retry)
             @_fatal_retry = true
             retry
