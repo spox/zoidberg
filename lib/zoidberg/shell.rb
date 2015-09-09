@@ -186,10 +186,11 @@ module Zoidberg
     module InstanceMethods
 
       # Initialize the signal instance if not
-      def _zoidberg_signal
-        memoize(:signal) do
-          ::Zoidberg::Signal.new
+      def _zoidberg_signal_interface
+        unless(@_zoidberg_signal)
+          @_zoidberg_signal = ::Zoidberg::Signal.new(:cache_signals => self.class.option?(:cache_signals))
         end
+        @_zoidberg_signal
       end
 
       # @return [Timer]
@@ -223,7 +224,7 @@ module Zoidberg
       # @param arg [Object] optional argument to transmit
       # @return [TrueClass, FalseClass]
       def signal(name, arg=nil)
-        _zoidberg_signal.signal(*[name, arg].compact)
+        current_self._zoidberg_signal_interface.signal(*[name, arg].compact)
       end
 
       # Broadcast a signal to all waiters
@@ -231,7 +232,7 @@ module Zoidberg
       # @param arg [Object] optional argument to transmit
       # @return [TrueClass, FalseClass]
       def broadcast(name, arg=nil)
-        _zoidberg_signal.broadcast(*[name, arg].compact)
+        current_self._zoidberg_signal_interface.broadcast(*[name, arg].compact)
       end
 
       # Wait for a given signal
@@ -239,7 +240,7 @@ module Zoidberg
       # @param name [String, Symbol] name of signal
       # @return [Object]
       def wait_for(name)
-        defer{ _zoidberg_signal.wait_for(name) }
+        defer{ current_self._zoidberg_signal_interface.wait_for(name) }
       end
       alias_method :wait, :wait_for
 
@@ -313,6 +314,27 @@ module Zoidberg
 
           class << self
             alias_method :unshelled_new, :new
+
+            # Set an option or multiple options
+            #
+            # @return [Array<Symbol>]
+            def option(*args)
+              @option ||= []
+              unless(args.empty?)
+                @option += args
+                @option.map!(&:to_sym).uniq!
+              end
+              @option
+            end
+
+            # Check if option is available
+            #
+            # @param arg [Symbol]
+            # @return [TrueClass, FalseClass]
+            def option?(arg)
+              option.include?(arg.to_sym)
+            end
+
           end
 
           include InstanceMethods
