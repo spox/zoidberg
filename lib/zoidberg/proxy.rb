@@ -119,9 +119,14 @@ module Zoidberg
 
     # When real instance is being supervised, unexpected exceptions
     # will force the real instance to be terminated and replaced with
-    # a fresh instance. If the real instance provides a #restart
+    # a fresh instance.
+    #
+    # If the real instance provides a #restart
     # method that will be called instead of forcibly terminating the
     # current real instance and rebuild a new instance.
+    #
+    # If the real instance provides a #restarted! method, that method
+    # will be called on the newly created instance on replacement
     #
     # @param error [Exception] exception that was caught
     # @return [TrueClass]
@@ -141,8 +146,8 @@ module Zoidberg
         &args.last
       )
       _raw_instance._zoidberg_proxy(self)
-      if(_raw_instance.respond_to?(:restarted))
-        _raw_instance.restarted
+      if(_raw_instance.respond_to?(:restarted!))
+        _raw_instance.restarted!
       end
       _release_lock!
       true

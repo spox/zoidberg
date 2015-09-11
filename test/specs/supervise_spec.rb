@@ -93,6 +93,17 @@ describe Zoidberg::Supervise do
       c
     end
 
+    let(:klass_with_restarted) do
+      c = klass.dup
+      c.class_eval do
+        attr_reader :restarted
+        def restarted!
+          @restarted = true
+        end
+      end
+      c
+    end
+
     let(:klass_with_terminate) do
       c = klass.dup
       c.class_eval do
@@ -145,6 +156,15 @@ describe Zoidberg::Supervise do
       inst.object_id.must_equal obj_id
       inst.restarted.must_equal true
       $terminated_log[obj_id].wont_equal true
+    end
+
+    it 'should call restarted on new instance after replacement' do
+      inst = klass_with_restarted.new
+      obj_id = inst.object_id
+      ->{ inst.snipe }.must_raise RuntimeError
+      sleep(0.01)
+      inst.object_id.wont_equal obj_id
+      inst.restarted.must_equal true
     end
 
   end
