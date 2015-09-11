@@ -5,6 +5,58 @@ module Zoidberg
   # Simple timer class
   class Timer
 
+    class Action
+
+      # @return [TrueClass, FalseClass]
+      attr_reader :recur
+      # @return [Proc] action to run
+      attr_reader :action
+      # @return [Numeric]
+      attr_reader :interval
+      # @return [Float]
+      attr_reader :last_run
+
+      # Create a new action
+      #
+      # @param args [Hash]
+      # @option args [Numeric] :interval
+      # @option args [TrueClass, FalseClass] :recur
+      # @return [self]
+      def initialize(args={}, &block)
+        unless(block)
+          raise ArgumentError.new 'Action is required. Block must be provided!'
+        end
+        @action = block
+        @recur = args.fetch(:recur, false)
+        @interval = args.fetch(:interval, 5)
+        @last_run = Time.now.to_f
+        @cancel = false
+      end
+
+      # Cancel the action
+      #
+      # @return [TrueClass]
+      def cancel
+        @recur = false
+        @cancel = true
+      end
+
+      # @return [TrueClass, FalseClass]
+      def cancelled?
+        @cancel
+      end
+
+      # Run the action
+      #
+      # @return [self]
+      def run!
+        @last_run = Time.now.to_f
+        action.call
+        self
+      end
+
+    end
+
     include Zoidberg::SoftShell
 
     # Custom exception used to wakeup timer
@@ -12,7 +64,7 @@ module Zoidberg
 
     # @return [Mutex]
     attr_reader :notify_locker
-    # @return [Array<Smash>] items to run
+    # @return [Array<Action>] items to run
     attr_reader :to_run
     # @return [TrueClass, FalseClass] timer is paused
     attr_reader :paused
@@ -31,35 +83,32 @@ module Zoidberg
     #
     # @param interval [Numeric]
     # @yield action to run
-    # @return [self]
+    # @return [Action]
     def every(interval, &block)
-      to_run.push(
-        Smash.new(
+      action = Action.new({
           :interval => interval,
-          :action => block,
-          :last_run => Time.now.to_f,
           :recur => true
-        )
+        },
+        &block
       )
+      to_run.push(action)
       reset
-      current_self
+      action
     end
 
     # Run action after given interval
     #
     # @param interval [Numeric]
     # @yield action to run
-    # @return [self]
+    # @return [Action]
     def after(interval, &block)
-      to_run.push(
-        Smash.new(
-          :interval => interval,
-          :action => block,
-          :last_run => Time.now.to_f
-        )
+      action = Action.new(
+        {:interval => interval},
+        &block
       )
+      to_run.push(action)
       reset
-      current_self
+      action
     end
 
     # Pause the timer to prevent any actions from being run
@@ -99,7 +148,7 @@ module Zoidberg
     # @return [self]
     def reset(wakeup=true)
       to_run.sort_by! do |item|
-        Time.now.to_f - (item[:interval] + item[:last_run])
+        Time.now.to_f - (item.interval + item.last_run)
       end
       if(wakeup)
         notify_locker.synchronize do
@@ -111,12 +160,10 @@ module Zoidberg
 
     # @return [Numeric, NilClass] interval to next action
     def next_interval
-      notify_locker.synchronize do
-        unless(to_run.empty? || paused)
-          item = to_run.first
-          result = Time.now.to_f - (item[:last_run] + item[:interval])
-          result < 0 ? 0 : result
-        end
+      unless(to_run.empty? || paused)
+        item = to_run.first
+        result = Time.now.to_f - (item.last_run + item.interval)
+        result < 0 ? 0 : result
       end
     end
 
@@ -125,23 +172,20 @@ module Zoidberg
     # @return [self]
     def run_ready
       items = to_run.find_all do |item|
-        (Time.now.to_f - (item[:interval] + item[:last_run])) <= 0
+        (Time.now.to_f - (item.interval + item.last_run)) <= 0
       end
       to_run.delete_if do |item|
         items.include?(item)
       end
       items.map do |item|
         begin
-          item[:action].call
+          item.run! unless item.cancelled?
         rescue DeadException
-          item[:recur] = false
+          item.cancel
         rescue => e
           Zoidberg.logger.error "<#{self}> Timed action generated an error: #{e.class.name} - #{e}"
         end
-        if(item[:recur])
-          item[:last_run] = Time.now.to_f
-          item
-        end
+        item if item.recur
       end.compact.each do |item|
         to_run << item
       end
@@ -154,11 +198,15 @@ module Zoidberg
     def run!
       loop do
         begin
+          interval = nil
           # TODO: update with select for better subsecond support
-          sleep _zoidberg_proxy.next_interval
           notify_locker.synchronize do
-            _zoidberg_proxy.run_ready
-            _zoidberg_proxy.reset(false)
+            interval = next_interval
+          end
+          sleep interval
+          notify_locker.synchronize do
+            run_ready
+            reset(false)
           end
         rescue Wakeup
           Zoidberg.logger.debug "<#{self}> Received wakeup notification. Rechecking sleep interval!"
