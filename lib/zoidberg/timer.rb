@@ -52,6 +52,7 @@ module Zoidberg
       def run!
         @last_run = Time.now.to_f
         action.call
+        @last_run = Time.now.to_f
         self
       end
 
@@ -147,12 +148,16 @@ module Zoidberg
     # @param wakeup [TrueClass, FalseClass] wakeup the timer thread
     # @return [self]
     def reset(wakeup=true)
-      to_run.sort_by! do |item|
-        Time.now.to_f - (item.interval + item.last_run)
-      end
       if(wakeup)
         notify_locker.synchronize do
+          to_run.sort_by! do |item|
+            (item.interval + item.last_run) - Time.now.to_f
+          end
           @thread.raise Wakeup.new
+        end
+      else
+        to_run.sort_by! do |item|
+          (item.interval + item.last_run) - Time.now.to_f
         end
       end
       current_self
@@ -162,7 +167,7 @@ module Zoidberg
     def next_interval
       unless(to_run.empty? || paused)
         item = to_run.first
-        result = Time.now.to_f - (item.last_run + item.interval)
+        result = (item.last_run + item.interval) - Time.now.to_f
         result < 0 ? 0 : result
       end
     end
@@ -172,7 +177,7 @@ module Zoidberg
     # @return [self]
     def run_ready
       items = to_run.find_all do |item|
-        (Time.now.to_f - (item.interval + item.last_run)) <= 0
+        ((item.interval + item.last_run) - Time.now.to_f) <= 0
       end
       to_run.delete_if do |item|
         items.include?(item)
