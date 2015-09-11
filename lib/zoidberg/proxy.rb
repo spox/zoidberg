@@ -141,6 +141,9 @@ module Zoidberg
         &args.last
       )
       _raw_instance._zoidberg_proxy(self)
+      if(_raw_instance.respond_to?(:restarted))
+        _raw_instance.restarted
+      end
       _release_lock!
       true
     end
