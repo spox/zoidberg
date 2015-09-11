@@ -195,9 +195,10 @@ module Zoidberg
 
       # @return [Timer]
       def timer
-        memoize(:timer) do
-          Timer.new
+        unless(@_zoidberg_timer)
+          @_zoidberg_timer = Timer.new
         end
+        @_zoidberg_timer
       end
 
       # Register a recurring action
