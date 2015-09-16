@@ -15,6 +15,8 @@ module Zoidberg
       attr_reader :interval
       # @return [Float]
       attr_reader :last_run
+      # @return [IO]
+      attr_reader :waker
 
       # Create a new action
       #
@@ -31,6 +33,7 @@ module Zoidberg
         @interval = args.fetch(:interval, 5)
         @last_run = Time.now.to_f
         @cancel = false
+        @waker = IO.pipe.last
       end
 
       # Cancel the action
@@ -63,8 +66,6 @@ module Zoidberg
     # Custom exception used to wakeup timer
     class Wakeup < StandardError; end
 
-    # @return [Mutex]
-    attr_reader :notify_locker
     # @return [Array<Action>] items to run
     attr_reader :to_run
     # @return [TrueClass, FalseClass] timer is paused
@@ -75,7 +76,6 @@ module Zoidberg
     # @return [self]
     def initialize
       @to_run = []
-      @notify_locker = Mutex.new
       @paused = false
       @thread = Thread.new{ run! }
     end
@@ -148,17 +148,11 @@ module Zoidberg
     # @param wakeup [TrueClass, FalseClass] wakeup the timer thread
     # @return [self]
     def reset(wakeup=true)
+      to_run.sort_by! do |item|
+        (item.interval + item.last_run) - Time.now.to_f
+      end
       if(wakeup)
-        notify_locker.synchronize do
-          to_run.sort_by! do |item|
-            (item.interval + item.last_run) - Time.now.to_f
-          end
-          @thread.raise Wakeup.new
-        end
-      else
-        to_run.sort_by! do |item|
-          (item.interval + item.last_run) - Time.now.to_f
-        end
+        waker.write '-'
       end
       current_self
     end
@@ -203,16 +197,11 @@ module Zoidberg
     def run!
       loop do
         begin
-          interval = nil
-          # TODO: update with select for better subsecond support
-          notify_locker.synchronize do
-            interval = next_interval
-          end
-          sleep interval
-          notify_locker.synchronize do
-            run_ready
-            reset(false)
-          end
+          interval = current_self.next_interval
+          io = IO.select([waker], [], [], interval).flatten.compact.first
+          io.read if io
+          current_self.run_ready
+          current_self.reset(false)
         rescue Wakeup
           Zoidberg.logger.debug "<#{self}> Received wakeup notification. Rechecking sleep interval!"
         rescue DeadException
