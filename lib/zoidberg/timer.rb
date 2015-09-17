@@ -15,8 +15,6 @@ module Zoidberg
       attr_reader :interval
       # @return [Float]
       attr_reader :last_run
-      # @return [IO]
-      attr_reader :waker
 
       # Create a new action
       #
@@ -33,7 +31,6 @@ module Zoidberg
         @interval = args.fetch(:interval, 5)
         @last_run = Time.now.to_f
         @cancel = false
-        @waker = IO.pipe.last
       end
 
       # Cancel the action
@@ -59,6 +56,15 @@ module Zoidberg
         self
       end
 
+      # @return [TrueClass, FalseClass]
+      def ready?
+        !cancelled? && (
+          Time.now.to_f > (
+            last_run + interval
+          )
+        )
+      end
+
     end
 
     include Zoidberg::SoftShell
@@ -66,10 +72,17 @@ module Zoidberg
     # Custom exception used to wakeup timer
     class Wakeup < StandardError; end
 
+    # Wakeup string
+    WAKEUP = "WAKEUP\n"
+
     # @return [Array<Action>] items to run
     attr_reader :to_run
     # @return [TrueClass, FalseClass] timer is paused
     attr_reader :paused
+    # @return [IO]
+    attr_reader :waker
+    # @return [IO]
+    attr_reader :alerter
 
     # Create a new timer
     #
@@ -77,6 +90,7 @@ module Zoidberg
     def initialize
       @to_run = []
       @paused = false
+      @alerter, @waker = IO.pipe
       @thread = Thread.new{ run! }
     end
 
@@ -152,7 +166,7 @@ module Zoidberg
         (item.interval + item.last_run) - Time.now.to_f
       end
       if(wakeup)
-        waker.write '-'
+        waker.write WAKEUP
       end
       current_self
     end
@@ -170,9 +184,7 @@ module Zoidberg
     #
     # @return [self]
     def run_ready
-      items = to_run.find_all do |item|
-        ((item.interval + item.last_run) - Time.now.to_f) <= 0
-      end
+      items = to_run.find_all(&:ready?)
       to_run.delete_if do |item|
         items.include?(item)
       end
@@ -197,13 +209,14 @@ module Zoidberg
     def run!
       loop do
         begin
-          interval = current_self.next_interval
-          io = IO.select([waker], [], [], interval).flatten.compact.first
-          io.read if io
-          current_self.run_ready
-          current_self.reset(false)
-        rescue Wakeup
-          Zoidberg.logger.debug "<#{self}> Received wakeup notification. Rechecking sleep interval!"
+          alerter.read_nonblock(WAKEUP.length)
+        rescue IO::WaitReadable
+          interval = current_self.next_interval if current_self
+          IO.select([alerter], [], [], interval)
+        end
+        begin
+          run_ready
+          reset(false)
         rescue DeadException
           raise
         rescue => e
