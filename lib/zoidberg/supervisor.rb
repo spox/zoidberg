@@ -3,7 +3,7 @@ require 'zoidberg'
 module Zoidberg
   class Supervisor
 
-    include Zoidberg::Shell
+    include Zoidberg::SoftShell
 
     # @return [Registry] current supervision registry
     attr_reader :registry
