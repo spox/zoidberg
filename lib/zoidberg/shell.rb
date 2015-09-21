@@ -265,7 +265,11 @@ module Zoidberg
         if(oxy)
           @_zoidberg_proxy = oxy
         end
-        @_zoidberg_proxy
+        if(@_zoidberg_proxy)
+          @_zoidberg_proxy
+        else
+          Lazy.new(self.class){ @_zoidberg_proxy }
+        end
       end
       alias_method :current_self, :_zoidberg_proxy
       alias_method :current_actor, :_zoidberg_proxy
@@ -293,6 +297,7 @@ module Zoidberg
         else
           raise TypeError.new "Unable to determine `Shell` type for this class `#{self}`!"
         end
+        proxy._zoidberg_set_instance(self.unshelled_new(*args, &block))
         weak_ref = Zoidberg::WeakRef.new(proxy)
         Zoidberg::Proxy.register(weak_ref.__id__, proxy)
         ObjectSpace.define_finalizer(weak_ref, Zoidberg::Proxy.method(:scrub!))

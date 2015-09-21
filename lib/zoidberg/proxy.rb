@@ -53,6 +53,16 @@ module Zoidberg
       raise NotImplementedError
     end
 
+    # Set the raw instance into the proxy and link proxy to instance
+    #
+    # @param inst [Object] raw instance being wrapped
+    # @return [NilClass]
+    def _zoidberg_set_instance(inst)
+      @_raw_instance = inst
+      @_raw_instance._zoidberg_proxy(self)
+      nil
+    end
+
     # @return [TrueClass, FalseClass] currently locked
     def _zoidberg_locked?
       false
@@ -142,25 +152,24 @@ module Zoidberg
     # @param error [Exception] exception that was caught
     # @return [TrueClass]
     def _zoidberg_handle_unexpected_error(error)
-      if(_raw_instance.respond_to?(:restart))
-        begin
-          _raw_instance.restart(error)
-          return # short circuit
-        rescue => e
+      unless(::Zoidberg.in_shutdown?)
+        if(_raw_instance.respond_to?(:restart))
+          begin
+            _raw_instance.restart(error)
+            return # short circuit
+          rescue => e
+          end
         end
+        _zoidberg_destroy!
+        _aquire_lock!
+        args = _build_args.dup
+        inst = args.shift.unshelled_new(*args.first, &args.last)
+        _zoidberg_set_instance(inst)
+        if(_raw_instance.respond_to?(:restarted!))
+          _raw_instance.restarted!
+        end
+        _release_lock!
       end
-      _zoidberg_destroy!
-      _aquire_lock!
-      args = _build_args.dup
-      @_raw_instance = args.shift.unshelled_new(
-        *args.first,
-        &args.last
-      )
-      _raw_instance._zoidberg_proxy(self)
-      if(_raw_instance.respond_to?(:restarted!))
-        _raw_instance.restarted!
-      end
-      _release_lock!
       true
     end
 

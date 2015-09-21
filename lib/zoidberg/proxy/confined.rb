@@ -28,11 +28,7 @@ module Zoidberg
           _isolate!
         end
         @_build_args = [klass, *args, block]
-        @_raw_instance = klass.unshelled_new(*args, &block)
-        @_raw_instance._zoidberg_proxy(self)
-        if(@_raw_instance.class.include?(::Zoidberg::Supervise))
-          @_supervised = true
-        end
+        @_supervised = klass.include?(::Zoidberg::Supervise)
         ::Zoidberg.logger.debug "Zoidberg object isolation wrap: #{@_build_args.inspect}"
       end
 
