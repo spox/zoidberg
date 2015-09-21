@@ -91,14 +91,14 @@ describe Zoidberg::Supervisor do
 
     it 'should supervise a multi-instance pool' do
       supervisor = Zoidberg::Supervisor.new
-      supervisor.pool klass, :as => :fubar, :size => 3
+      supervisor.pool(klass, :as => :fubar, :size => 3)
       supervisor[:fubar].foobar.must_equal 'fubar'
       supervisor[:fubar]._worker_count.must_equal 3
     end
 
     it 'should accept init argument' do
       supervisor = Zoidberg::Supervisor.new
-      supervisor.pool klass_arg, :as => :fubar, :args => ['fubar']
+      supervisor.pool(klass_arg, :as => :fubar, :args => ['fubar'])
       supervisor[:fubar].arg.must_equal 'fubar'
     end
 
