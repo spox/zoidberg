@@ -5,7 +5,7 @@ module Zoidberg
   # instances within the pool
   class Pool
 
-    include Zoidberg::Shell
+    include Zoidberg::SoftShell
 
     # @return [Array<Object>] workers within pool
     attr_reader :_workers
