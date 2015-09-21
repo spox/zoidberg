@@ -9,6 +9,8 @@ module Zoidberg
       attr_reader :_source_thread
       # @return [Queue] current request queue
       attr_reader :_requests
+      # @return [Queue] result queue
+      attr_reader :_results
       # @return [TrueClass, FalseClass] blocked running task
       attr_reader :_blocked
 
@@ -18,6 +20,7 @@ module Zoidberg
       # @return [self]
       def initialize(klass, *args, &block)
         @_requests = ::Queue.new
+        @_results = ::Queue.new
         @_blocked = false
         @_source_thread = ::Thread.new do
           ::Zoidberg.logger.debug 'Starting the isolation request processor'
@@ -44,7 +47,7 @@ module Zoidberg
           :block => block,
           :response => nil,
           :async => true,
-          :blocking => blocking == :blocking
+          :blocked => !!blocking
         )
         nil
       end
@@ -102,8 +105,26 @@ module Zoidberg
         end
       end
 
+      # @return [TrueClass, FalseClass]
       def _zoidberg_available?
         !_blocked
+      end
+
+      # @return [TrueClass, FalseClass]
+      def threaded?
+        ::Thread.current != _source_thread
+      end
+
+      def task_defer(wait_task)
+        _results << wait_task
+      end
+
+      def inspect
+        _raw_instance.inspect
+      end
+
+      def to_s
+        _raw_inspect.to_s
       end
 
       protected
@@ -112,12 +133,13 @@ module Zoidberg
       def _isolate!
         begin
           ::Kernel.loop do
+            item = _requests.pop
             begin
-              _process_request(_requests.pop)
+              _process_request(item)
             rescue => e
               ::Zoidberg.logger.error "Unexpected looping error! (#{e.class}: #{e})"
-              ::Zoidberg.logger.error "#{e.class}: #{e}\n#{e.backtrace.join("\n")}"
-              ::Thread.main.raise e
+              ::Zoidberg.logger.debug "#{e.class}: #{e}\n#{e.backtrace.join("\n")}"
+              item.push(e)
             end
           end
         ensure
@@ -130,43 +152,57 @@ module Zoidberg
       # Process a request
       #
       # @param request [Hash]
-      # @return [self]
+      # @return [NilClass]
       def _process_request(request)
         begin
           @_blocked = !request[:async]
           ::Zoidberg.logger.debug "Processing received request: #{request.inspect}"
           unless(request[:task])
-            request[:task] = ::Zoidberg::Task.new(request[:async] ? :async : :serial, _raw_instance, [request]) do |req|
+            if(request[:response])
+              request[:result] = _results
+            end
+            request[:task] = ::Zoidberg::Task.new(!self.class.option?(:evented) || request[:async] ? :async : :serial, _raw_instance, [request]) do |req|
               begin
                 result = origin.__send__(
                   *req[:arguments],
                   &req[:block]
                 )
                 if(req[:response])
-                  req[:response] << result
+                  req[:result] << result
                 end
               rescue ::Exception => exception
                 if(req[:response])
-                  req[:response] << exception
+                  req[:result] << exception
                 end
               end
             end
           end
-          if(request[:task].waiting?)
+          if(!request[:task_defer] || request[:task_defer].complete?)
             if(_raw_instance.alive?)
-              request[:task].proceed
-              request[:task].value if request[:blocking]
+              if(request[:task].waiting?)
+                request[:task].proceed
+              end
+              if(!request[:async] || request[:blocking])
+                val = _results.pop
+                if(val.is_a?(::Zoidberg::Task))
+                  ::Thread.new do
+                    val.value
+                    _requests.push(request)
+                  end
+                else
+                  request[:response].push(val)
+                  ::Zoidberg.logger.debug "Request processing completed. #{request.inspect}"
+                end
+              end
             else
               request[:response] << ::Zoidberg::DeadException.new('Instance in terminated state!')
               request[:task].halt!
             end
           end
-          _requests.push(request) unless request[:task].complete? || request[:async]
-          ::Zoidberg.logger.debug "Request processing completed. #{request.inspect}"
         ensure
           @_blocked = false
         end
-        self
+        nil
       end
 
     end
