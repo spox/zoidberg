@@ -7,6 +7,7 @@ require 'zoidberg/version'
 module Zoidberg
   autoload :DeadException, 'zoidberg/shell'
   autoload :Future, 'zoidberg/future'
+  autoload :Lazy, 'zoidberg/lazy'
   autoload :Logger, 'zoidberg/logger'
   autoload :Pool, 'zoidberg/pool'
   autoload :Proxy, 'zoidberg/proxy'
@@ -23,6 +24,7 @@ module Zoidberg
 
   class << self
 
+    attr_accessor :signal_shutdown
     attr_accessor :default_shell
 
     # @return [Zoidberg::Logger]
@@ -46,6 +48,14 @@ module Zoidberg
       SecureRandom.uuid
     end
 
+    def signal_reset
+      self.signal_shutdown = false
+    end
+
+    def in_shutdown?
+      !!self.signal_shutdown
+    end
+
   end
 
 end
@@ -54,3 +64,9 @@ end
 Zoidberg.logger = Zoidberg::Logger.new(STDERR)
 # Set default shell to soft shell
 Zoidberg.default_shell = Zoidberg::SoftShell
+
+%w(INT TERM).each do |sig_name|
+  Signal.trap(sig_name) do |*_|
+    Zoidberg.signal_shutdown = true
+  end
+end
