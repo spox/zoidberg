@@ -132,9 +132,16 @@ module Zoidberg
     # @yield block to execute without lock
     # @return [Object] result of block
     def defer(&block)
-      Fiber.yield
-      if(block)
-        ::Fiber.new(&block).resume
+      if(current_self.threaded?)
+        action = Task.new(:async, current_self){ block.call }
+        current_self.task_defer(action)
+        Thread.stop
+        action.value
+      else
+        Fiber.yield
+        if(block)
+          ::Fiber.new(&block).resume
+        end
       end
     end
 
@@ -162,7 +169,7 @@ module Zoidberg
     def sleep(length=nil)
       start_time = ::Time.now.to_f
       if(length)
-        ::Kernel.sleep(length)
+        defer{ ::Kernel.sleep(length) }
       else
         ::Thread.current[:root_fiber] == ::Fiber.current ? ::Kernel.sleep : ::Fiber.yield
       end
