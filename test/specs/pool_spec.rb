@@ -56,6 +56,7 @@ describe Zoidberg::Pool do
     pool._workers.first._raw_instance.object_id.must_equal o_id
     ->{ pool.snipe }.must_raise RuntimeError
     pool._workers.size.must_equal 1
+    pool.ohai.must_equal :ohai
     pool._workers.first._raw_instance.object_id.wont_equal o_id
   end
 
@@ -63,10 +64,10 @@ describe Zoidberg::Pool do
     pool._worker_count 5
     pool._workers.size.must_equal 5
     threads = 50.times.map do |i|
-      Thread.new{ sleep(rand(1)); pool.ohai }
+      Thread.new{ pool.ohai }
     end
     threads.map(&:alive?).must_include true
-    sleep(1.2)
+    sleep(2)
     threads.map(&:alive?).wont_include true
   end
 
