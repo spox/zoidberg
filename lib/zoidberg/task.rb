@@ -140,6 +140,10 @@ module Zoidberg
           raise
         end
       end
+      until(@task.stop?)
+        sleep(0.01)
+      end
+      @task
     end
 
   end
