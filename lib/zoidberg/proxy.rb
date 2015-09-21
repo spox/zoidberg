@@ -58,6 +58,16 @@ module Zoidberg
       false
     end
 
+    # @return [TrueClass]
+    def _aquire_lock!
+      true
+    end
+
+    # @return [TrueClass]
+    def _release_lock!
+      true
+    end
+
     # @return [TrueClass, FalseClass] currently unlocked
     def _zoidberg_available?
       !_zoidberg_locked?
@@ -99,6 +109,7 @@ module Zoidberg
     # @param e [Exception]
     def _zoidberg_unexpected_error(e)
       ::Zoidberg.logger.error "Unexpected exception: #{e.class} - #{e}"
+      ::Zoidberg.logger.debug "#{e.class}: #{e}\n#{e.backtrace.join("\n")}"
       unless((defined?(Timeout) && e.is_a?(Timeout::Error)) || e.is_a?(::Zoidberg::DeadException))
         if(_zoidberg_link)
           if(_zoidberg_link.class.trap_exit)
@@ -189,7 +200,6 @@ module Zoidberg
         _raw_instance.send(:define_singleton_method, :to_s, &death_from_above_display)
         _raw_instance.send(:define_singleton_method, :inspect, &death_from_above_display)
         _raw_instance.send(:define_singleton_method, :_zoidberg_destroyed, ::Proc.new{ true })
-        _zoidberg_signal(:destroyed)
       end
       true
     end
