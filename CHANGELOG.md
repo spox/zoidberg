@@ -1,3 +1,9 @@
+# v0.1.6
+* Add Zoidberg::Lazy
+* Explicitly state what shells are used internally
+* DRY raw instance wrapping
+* Flag signal context and disable any locking
+
 # v0.1.4
 * Timer updates and fix spec
 
