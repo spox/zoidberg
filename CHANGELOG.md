@@ -1,3 +1,6 @@
+# v0.1.8
+* Fix to properly remove canceled actions
+
 # v0.1.6
 * Add Zoidberg::Lazy
 * Explicitly state what shells are used internally
