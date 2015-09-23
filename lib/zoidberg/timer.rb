@@ -45,6 +45,7 @@ module Zoidberg
       def cancelled?
         @cancel
       end
+      alias_method :canceled?, :cancelled?
 
       # Run the action
       #
