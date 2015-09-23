@@ -50,18 +50,18 @@ module Zoidberg
       #
       # @return [self]
       def run!
-        @last_run = Time.now.to_f
-        action.call
-        @last_run = Time.now.to_f
+        unless(cancelled?)
+          @last_run = Time.now.to_f
+          action.call
+          @last_run = Time.now.to_f
+        end
         self
       end
 
       # @return [TrueClass, FalseClass]
       def ready?
-        !cancelled? && (
-          Time.now.to_f > (
-            last_run + interval
-          )
+        Time.now.to_f > (
+          last_run + interval
         )
       end
 
