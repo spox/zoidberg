@@ -10,16 +10,19 @@ module Zoidberg
 
     class AsyncProxy
       attr_reader :target
-      def initialize(instance)
+      attr_reader :origin_proxy
+      def initialize(instance, proxy)
         @target = instance
+        @origin_proxy = proxy
       end
       def method_missing(*args, &block)
         target._zoidberg_thread(
           Thread.new{
             begin
               target.send(*args, &block)
-            rescue Exception => e
-              target._zoidberg_proxy.send(:raise, e)
+            rescue StandardError, ScriptError => e
+              origin_proxy._zoidberg_unexpected_error(e)
+              raise
             end
           }
         )
@@ -38,7 +41,7 @@ module Zoidberg
         result = yield if block_given?
         _zoidberg_proxy._aquire_lock!
         result
-      rescue Exception => e
+      rescue ::StandardError, ::ScriptError => e
         _zoidberg_proxy._aquire_lock!
         raise e
       end
@@ -52,15 +55,27 @@ module Zoidberg
       if(block_given?)
         unless(locked)
           thread = ::Thread.new do
-            self.instance_exec(&block)
+            begin
+              self.instance_exec(&block)
+            rescue ::StandardError, ::ScriptError => e
+              current_self._zoidberg_unexpected_error(e)
+              raise
+            end
           end
         else
-          thread = ::Thread.new{ current_self.instance_exec(&block) }
+          thread = ::Thread.new do
+            begin
+              current_self.instance_exec(&block)
+            rescue ::StandardError, ::ScriptError => e
+              current_self._zoidberg_unexpected_error(e)
+              raise
+            end
+          end
         end
         _zoidberg_thread(thread)
         nil
       else
-        ::Zoidberg::SoftShell::AsyncProxy.new(locked ? current_self : self)
+        ::Zoidberg::SoftShell::AsyncProxy.new(locked ? current_self : self, current_self)
       end
     end
 
@@ -232,7 +247,7 @@ module Zoidberg
       # @param arg [Object] optional argument to transmit
       # @return [TrueClass, FalseClass]
       def signal(name, arg=nil)
-        current_self._zoidberg_signal_interface.signal(*[name, arg].compact)
+        _zoidberg_signal_interface.signal(*[name, arg].compact)
       end
 
       # Broadcast a signal to all waiters
