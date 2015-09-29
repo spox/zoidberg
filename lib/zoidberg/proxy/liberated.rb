@@ -74,7 +74,13 @@ module Zoidberg
       # @return [TrueClas]
       def _aquire_lock!
         if(@_lock)
-          @_lock.lock unless @_locker == ::Thread.current
+          if(::ENV['ZOIDBERG_DEBUG'] == 'true')
+            ::Timeout.timeout(::ENV.fetch('ZOIDBERG_DEBUG_TIMEOUT', 10).to_i) do
+              @_lock.lock unless @_locker == ::Thread.current
+            end
+          else
+            @_lock.lock unless @_locker == ::Thread.current
+          end
           @_locker = ::Thread.current
           @_locker_count += 1
           _zoidberg_signal(:locked)
