@@ -4,10 +4,12 @@
 
 ## About
 
-Zoidberg is a small library attempting to provide synchronization
-and supervision without requiring any modifications to existing
-implementations. It is heavily inspired by Celluloid and while some
-APIs may look familiar they do not share a familiar implementation.
+Zoidberg does a couple things. First, it can be a simple way to
+provide implicit synchronization for thread safety in existing
+code that is otherwise unsafe. Second, it can provide supervision
+and pooling. This library is heavily inspired by Celluloid but,
+while some APIs may look familiar, they do not share a familiar
+implementation.
 
 ## Usage
 
@@ -120,6 +122,10 @@ and running it lots of times we get:
 So this is pretty neat. We had a class that was shown to not be thread
 safe. We tossed a module into that class. Now that class is thread safe.
 
+### Should I really do this?
+
+Maybe?
+
 ## Features
 
 ### Implicit Locking
@@ -128,6 +134,39 @@ Zoidberg automatically synchronizes requests made to an instance. This
 behavior can be short circuited if the actual instance creates a thread
 and calls a method on itself. Otherwise, all external access to the
 instance will be automatically synchronized. Nifty.
+
+This synchronization behavior comes from the shells included within
+Zoidberg. There are two styles of shells available:
+
+#### `Zoidberg::SoftShell`
+
+This is the default shell used when the generic `Zoidberg::Shell` module
+is included. It will wrap the raw instance and synchronize requests to
+the instance.
+
+#### `Zoidberg::HardShell`
+
+This shell is still in development and not fully supported yet. The
+hard shell is an implementation that is more reflective of the actor
+model with a single thread wrapping an instance and synchronizing access.
+
+### Supervision
+
+Zoidberg can provide instance supervision. To enable supervision on a
+class, include the module:
+
+```ruby
+
+class Fubar
+  include Zoidberg::Supervise
+end
+```
+
+This will implicitly load the `Zoidberg::Shell` module and new instances
+will be supervised. Supervision means Zoidberg will watch for unexpected
+exceptions. What are "unexpected exceptions"? They are any exception raised
+via `raise`. This will cause the instance to be torn down and a new instance
+to be instantiated.
 
 ### Supervision
 
