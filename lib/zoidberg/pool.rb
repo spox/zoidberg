@@ -78,7 +78,8 @@ module Zoidberg
     # Used to proxy request to worker
     def method_missing(*args, &block)
       worker = _zoidberg_free_worker
-      defer{ worker.send(*args, &block) }
+      current_self._release_lock!
+      worker.send(*args, &block)
     end
 
     # Find or wait for a free worker
