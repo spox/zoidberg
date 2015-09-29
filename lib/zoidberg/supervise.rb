@@ -6,6 +6,14 @@ module Zoidberg
     # Customized exception type to wrap allowed errors
     class AbortException < StandardError
       attr_accessor :original_exception
+
+      def to_s
+        if(original_exception)
+          "#{original_exception.class}: #{original_exception}"
+        else
+          super
+        end
+      end
     end
 
     module InstanceMethods
@@ -16,6 +24,9 @@ module Zoidberg
       # @param e [Exception]
       # @raises [AbortException]
       def abort(e)
+        unless(e.is_a?(::Exception))
+          e = StandardError.new(e)
+        end
         new_e = ::Zoidberg::Supervise::AbortException.new
         new_e.original_exception = e
         ::Kernel.raise new_e
