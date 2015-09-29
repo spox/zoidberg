@@ -1,3 +1,8 @@
+# v0.1.10
+* Handle unexpected errors from asyncs while supervised
+* Pool releases lock once worker has been aquired
+* Provide better string generation of abort exceptions
+
 # v0.1.8
 * Fix to properly remove canceled actions
 
