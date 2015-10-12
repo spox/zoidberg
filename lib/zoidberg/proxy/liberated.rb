@@ -83,7 +83,6 @@ module Zoidberg
           end
           @_locker = ::Thread.current
           @_locker_count += 1
-          _zoidberg_signal(:locked)
         end
         true
       end
@@ -100,7 +99,6 @@ module Zoidberg
               @_lock.unlock if @_lock.locked?
             end
           end
-          _zoidberg_signal(:unlocked)
         end
         true
       end

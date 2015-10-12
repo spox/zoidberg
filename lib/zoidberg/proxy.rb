@@ -71,11 +71,13 @@ module Zoidberg
     # @return [TrueClass]
     def _aquire_lock!
       true
+      _zoidberg_signal(:locked)
     end
 
     # @return [TrueClass]
     def _release_lock!
       true
+      _zoidberg_signal(:unlocked) if _zoidberg_available?
     end
 
     # @return [TrueClass, FalseClass] currently unlocked
@@ -217,6 +219,16 @@ module Zoidberg
     # @return [self]
     def _zoidberg_object
       self
+    end
+
+    # Override to directly output object stringification
+    def to_s
+      _raw_instance.to_s
+    end
+
+    # Override to directly output object inspection
+    def inspect
+      _raw_instance.inspect
     end
 
   end
