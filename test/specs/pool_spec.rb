@@ -1,3 +1,4 @@
+require 'zoidberg'
 require 'minitest/autorun'
 
 describe Zoidberg::Pool do
@@ -67,7 +68,7 @@ describe Zoidberg::Pool do
       Thread.new{ pool.ohai }
     end
     threads.map(&:alive?).must_include true
-    sleep(2)
+    sleep(0.4)
     threads.map(&:alive?).wont_include true
   end
 
