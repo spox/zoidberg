@@ -9,20 +9,26 @@ module Zoidberg
   module SoftShell
 
     class AsyncProxy
+      attr_reader :locked
       attr_reader :target
       attr_reader :origin_proxy
-      def initialize(instance, proxy)
-        @target = instance
+      def initialize(locked_async, proxy)
+        @locked = locked_async
         @origin_proxy = proxy
+        @target = proxy._raw_instance
       end
       def method_missing(*args, &block)
         target._zoidberg_thread(
           Thread.new{
+            origin_proxy._aquire_lock! if locked
+            got_lock = locked
             begin
               target.send(*args, &block)
             rescue StandardError, ScriptError => e
               origin_proxy._zoidberg_unexpected_error(e)
               raise
+            ensure
+              origin_proxy._release_lock! if got_lock
             end
           }
         )
@@ -36,14 +42,14 @@ module Zoidberg
     # @yield block to execute without lock
     # @return [Object] result of block
     def defer
-      _zoidberg_proxy._release_lock!
+      re_lock = _zoidberg_proxy._release_lock!
       begin
         result = yield if block_given?
-        _zoidberg_proxy._aquire_lock!
         result
       rescue ::StandardError, ::ScriptError => e
-        _zoidberg_proxy._aquire_lock!
         raise e
+      ensure
+        _zoidberg_proxy._aquire_lock! if re_lock
       end
     end
 
@@ -58,24 +64,28 @@ module Zoidberg
             begin
               self.instance_exec(&block)
             rescue ::StandardError, ::ScriptError => e
-              current_self._zoidberg_unexpected_error(e)
+              _zoidberg_proxy._zoidberg_unexpected_error(e)
               raise
             end
           end
         else
           thread = ::Thread.new do
+            _zoidberg_proxy._aquire_lock!
             begin
-              current_self.instance_exec(&block)
+              got_lock = true
+              self.instance_exec(&block)
             rescue ::StandardError, ::ScriptError => e
-              current_self._zoidberg_unexpected_error(e)
+              _zoidberg_proxy._zoidberg_unexpected_error(e)
               raise
+            ensure
+              _zoidberg_proxy._release_lock! if got_lock
             end
           end
         end
         _zoidberg_thread(thread)
         nil
       else
-        ::Zoidberg::SoftShell::AsyncProxy.new(locked ? current_self : self, current_self)
+        ::Zoidberg::SoftShell::AsyncProxy.new(locked, _zoidberg_proxy)
       end
     end
 
@@ -85,7 +95,7 @@ module Zoidberg
     # @param thread [Thread]
     # @return [TrueClass]
     def _zoidberg_thread(thread)
-      _zoidberg_proxy._raw_threads[self.object_id].push(thread)
+      _zoidberg_proxy._zoidberg_thread(thread)
       true
     end
 
@@ -255,7 +265,7 @@ module Zoidberg
       # @param arg [Object] optional argument to transmit
       # @return [TrueClass, FalseClass]
       def broadcast(name, arg=nil)
-        current_self._zoidberg_signal_interface.broadcast(*[name, arg].compact)
+        _zoidberg_signal_interface.broadcast(*[name, arg].compact)
       end
 
       # Wait for a given signal
@@ -263,7 +273,7 @@ module Zoidberg
       # @param name [String, Symbol] name of signal
       # @return [Object]
       def wait_for(name)
-        defer{ current_self._zoidberg_signal_interface.wait_for(name) }
+        defer{ _zoidberg_signal_interface.wait_for(name) }
       end
       alias_method :wait, :wait_for
 

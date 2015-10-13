@@ -69,15 +69,17 @@ module Zoidberg
     end
 
     # @return [TrueClass]
-    def _aquire_lock!
-      true
+    def _aquire_lock!(&block)
+      result = block ? block.call : true
       _zoidberg_signal(:locked)
+      result
     end
 
     # @return [TrueClass]
-    def _release_lock!
-      true
-      _zoidberg_signal(:unlocked) if _zoidberg_available?
+    def _release_lock!(&block)
+      result = block ? block.call : true
+      _zoidberg_signal(:unlocked, self) if _zoidberg_available?
+      result
     end
 
     # @return [TrueClass, FalseClass] currently unlocked
@@ -107,9 +109,9 @@ module Zoidberg
     #
     # @param sig [Symbol]
     # @return [TrueClass, FalseClass] signal was sent
-    def _zoidberg_signal(sig)
+    def _zoidberg_signal(*args)
       if(@_zoidberg_signal)
-        @_zoidberg_signal.signal(sig)
+        @_zoidberg_signal.signal(*args)
         true
       else
         false
@@ -164,13 +166,16 @@ module Zoidberg
         end
         _zoidberg_destroy!
         _aquire_lock!
-        args = _build_args.dup
-        inst = args.shift.unshelled_new(*args.first, &args.last)
-        _zoidberg_set_instance(inst)
-        if(_raw_instance.respond_to?(:restarted!))
-          _raw_instance.restarted!
+        begin
+          args = _build_args.dup
+          inst = args.shift.unshelled_new(*args.first, &args.last)
+          _zoidberg_set_instance(inst)
+          if(_raw_instance.respond_to?(:restarted!))
+            _raw_instance.restarted!
+          end
+        ensure
+          _release_lock!
         end
-        _release_lock!
       end
       true
     end
@@ -190,7 +195,7 @@ module Zoidberg
             _raw_instance.terminate(error)
           end
         end
-        death_from_above = ::Proc.new do
+        death_from_above = ::Proc.new do |*_|
           ::Kernel.raise ::Zoidberg::DeadException.new('Instance in terminated state!')
         end
         death_from_above_display = ::Proc.new do
@@ -229,6 +234,14 @@ module Zoidberg
     # Override to directly output object inspection
     def inspect
       _raw_instance.inspect
+    end
+
+    def signal(*args)
+      _raw_instance.signal(*args)
+    end
+
+    def async(*args, &block)
+      _raw_instance.async(*args, &block)
     end
 
   end

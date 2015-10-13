@@ -31,10 +31,27 @@ module Zoidberg
         @_accessing_threads << ::Thread.current
         begin
           _aquire_lock!
+          @got_lock = true
           if(::ENV['ZOIDBERG_TESTING'])
-            ::Kernel.require 'timeout'
-            ::Timeout.timeout(::ENV.fetch('ZOIDBERG_TESTING_TIMEOUT', 5).to_i) do
-              res = @_raw_instance.__send__(*args, &block)
+            timer = ::Thread.new(::Thread.current) do |origin|
+              begin
+                time = ::ENV.fetch('ZOIDBERG_TESTING_TIMEOUT', 5).to_i
+                ::Timeout.timeout(time) do
+                  ::Kernel.sleep(time)
+                end
+                nil
+              rescue => error
+                error
+              end
+            end
+            res = @_raw_instance.__send__(*args, &block)
+            if(timer.alive?)
+              timer.kill
+            else
+              val = timer.value
+              if(val.is_a?(Exception))
+                raise val
+              end
             end
           else
             res = @_raw_instance.__send__(*args, &block)
@@ -51,9 +68,11 @@ module Zoidberg
             ::Kernel.raise e
           end
         ensure
-          _release_lock!
-          t_idx = @_accessing_threads.index(::Thread.current)
-          @_accessing_threads.delete_at(t_idx) if t_idx
+          if(@got_lock)
+            _release_lock!
+            t_idx = @_accessing_threads.index(::Thread.current)
+            @_accessing_threads.delete_at(t_idx) if t_idx
+          end
         end
         res
       end
@@ -68,39 +87,52 @@ module Zoidberg
         !_zoidberg_locked?
       end
 
+      # Register a running thread for this instance. Registered
+      # threads are tracked and killed on cleanup
+      #
+      # @param thread [Thread]
+      # @return [TrueClass]
+      def _zoidberg_thread(thread)
+        _raw_threads[self.object_id].push(thread)
+        true
+      end
+
       # Aquire the lock to access real instance. If already locked, will
       # wait until lock can be aquired.
       #
       # @return [TrueClas]
       def _aquire_lock!
-        if(@_lock)
-          if(::ENV['ZOIDBERG_DEBUG'] == 'true')
-            ::Timeout.timeout(::ENV.fetch('ZOIDBERG_DEBUG_TIMEOUT', 10).to_i) do
+        super do
+          if(@_lock)
+            if(::ENV['ZOIDBERG_DEBUG'] == 'true')
+              ::Timeout.timeout(::ENV.fetch('ZOIDBERG_DEBUG_TIMEOUT', 10).to_i) do
+                @_lock.lock unless @_locker == ::Thread.current
+              end
+            else
               @_lock.lock unless @_locker == ::Thread.current
             end
-          else
-            @_lock.lock unless @_locker == ::Thread.current
+            @_locker = ::Thread.current
+            @_locker_count += 1
           end
-          @_locker = ::Thread.current
-          @_locker_count += 1
+          true
         end
-        true
       end
 
       # Release the lock to access real instance
       #
       # @return [TrueClass]
       def _release_lock!
-        if(@_lock)
-          if(@_locker == ::Thread.current)
+        super do
+          if(@_lock && @_locker == ::Thread.current)
             @_locker_count -= 1
             if(@_locker_count < 1)
               @_locker = nil
               @_lock.unlock if @_lock.locked?
             end
+          else
+            false
           end
         end
-        true
       end
 
       # Ensure any async threads are killed and accessing threads are
