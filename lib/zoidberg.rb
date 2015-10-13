@@ -70,3 +70,7 @@ Zoidberg.default_shell = Zoidberg::SoftShell
     Zoidberg.signal_shutdown = true
   end
 end
+
+if(::ENV['ZOIDBERG_TESTING'])
+  ::Kernel.require 'timeout'
+end
