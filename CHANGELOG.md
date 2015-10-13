@@ -1,3 +1,10 @@
+# v0.1.12
+* Move event signal to abstract proxy
+* Update timeout library usage
+* Remove defer usage fetching worker within pool
+* Clean locking usage to prevent miscounts
+* Fix async style locking to ensure expected behavior
+
 # v0.1.10
 * Handle unexpected errors from asyncs while supervised
 * Pool releases lock once worker has been aquired
