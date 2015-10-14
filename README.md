@@ -128,6 +128,9 @@ Maybe?
 
 ## Features
 
+Originally, we looked at just adding safety but this library provides
+a handful more of things.
+
 ### Implicit Locking
 
 Zoidberg automatically synchronizes requests made to an instance. This
@@ -150,6 +153,84 @@ This shell is still in development and not fully supported yet. The
 hard shell is an implementation that is more reflective of the actor
 model with a single thread wrapping an instance and synchronizing access.
 
+### Garbage Collection
+
+Garbage collection happens as usual with Zoidberg. When an instance is created
+the result may look like the instance but really it is a proxy wrapping the
+raw instance. When the proxy falls out of scope and is garbage collected the
+raw instance it wrapped will also fall out of scope and be garbage collected.
+This wrapping behavior is what allows supervised instances to be automatically
+swapped out on failure state without requiring intervention. It also introduces
+the ability to add support for destructors, which is pretty cool.
+
+#### Destructors
+
+Instances can define destructors via the `#terminate` method. When the instance
+is garbage collected, the `#terminate` method will be called prior to the instance
+falling out of scope and being removed from the system. This allows the introduction
+of destructors:
+
+```ruby
+
+class Fubar
+  include Zoidberg::Shell
+
+  ...
+
+  def terminate
+    puts "I am being garbage collected!"
+  end
+end
+```
+
+### Signals
+
+Simple signals are available as well as signals pushing data.
+
+#### Simple Signals
+
+```ruby
+sig = Zoidberg::Signal.new
+Thread.new do
+  sig.wait(:go)
+  puts 'Done!'
+end
+puts 'Ready to signal!'
+sleep(1)
+sig.signal(:go)
+puts 'Signal sent'
+```
+
+#### Simple Broadcasting
+
+```ruby
+sig = Zoidberg::Signal.new
+5.times do
+  Thread.new do
+    sig.wait(:go)
+    puts 'Done!'
+  end
+end
+puts 'Ready to signal!'
+sleep(1)
+sig.broadcast(:go)
+puts 'Broadcast sent'
+```
+
+#### Pushing data
+
+```ruby
+sig = Zoidberg::Signal.new
+Thread.new do
+  value = sig.wait(:go)
+  puts "Done! Received: #{value.inspect}"
+end
+puts 'Ready to signal!'
+sleep(1)
+sig.signal(:go, :ohai)
+puts 'Signal sent'
+```
+
 ### Supervision
 
 Zoidberg can provide instance supervision. To enable supervision on a
@@ -166,14 +247,8 @@ This will implicitly load the `Zoidberg::Shell` module and new instances
 will be supervised. Supervision means Zoidberg will watch for unexpected
 exceptions. What are "unexpected exceptions"? They are any exception raised
 via `raise`. This will cause the instance to be torn down and a new instance
-to be instantiated.
-
-### Supervision
-
-Zoidberg provides lazy supervision. There is no single supervisor. Instead
-supervision is handled by the proxy which wraps the class. Failure of an
-instance will result in termination + reinstantiation. When externally
-accessing the instance nothing requires modification.
+to be instantiated. To the outside observer, nothing will change and no
+modification is required.
 
 ### Pools
 
@@ -181,10 +256,3 @@ Zoidberg allows pooling lazy supervised instances. Unexpected failures will
 cause the instance to be terminated and re-initialized as usual. The pool
 will deliver requests to free instances, or queue them until a free instance
 is available.
-
-### Garbage Collection
-
-Garbage collection happens as usual with Zoidberg. When an instance is created
-the result may look like the instance but really it is proxy wrapping the
-raw instance. When the proxy falls out of scope and is garbage collected the
-raw instance it wrapped will also fall out of scope and be garbage collected.
