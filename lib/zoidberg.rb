@@ -66,8 +66,9 @@ Zoidberg.logger = Zoidberg::Logger.new(STDERR)
 Zoidberg.default_shell = Zoidberg::SoftShell
 
 %w(INT TERM).each do |sig_name|
-  Signal.trap(sig_name) do |*_|
-    Zoidberg.signal_shutdown = true
+  original = Signal.trap(sig_name) do |*_|
+    Zoidberg.signal_shutdown = true unless ENV['ZOIDBERG_TESTING']
+    original.call if original.respond_to?(:call)
   end
 end
 
