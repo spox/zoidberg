@@ -5,6 +5,9 @@ module Zoidberg
 
     class Liberated < Proxy
 
+      # Time allowed for threads to gracefully die
+      THREAD_KILL_AFTER = 5
+
       # @return [Thread] current owner of lock
       attr_reader :_locker
       # @return [Hash<Integer:Thread>]
@@ -56,17 +59,12 @@ module Zoidberg
           else
             res = @_raw_instance.__send__(*args, &block)
           end
-        rescue ::Zoidberg::Supervise::AbortException => e
+        rescue ::Zoidberg::AbortException => e
           ::Kernel.raise e.original_exception
         rescue ::Exception => e
           ::Zoidberg.logger.debug "Exception on: #{_raw_instance.class.name}##{args.first}(#{args.slice(1, args.size).map(&:inspect).join(', ')})"
           _zoidberg_unexpected_error(e)
-          if(e.class.to_s == 'fatal' && !@_fatal_retry)
-            @_fatal_retry = true
-            retry
-          else
-            ::Kernel.raise e
-          end
+          ::Kernel.raise e
         ensure
           if(@got_lock)
             _release_lock!
@@ -140,11 +138,15 @@ module Zoidberg
       #
       # @return [TrueClass]
       def _zoidberg_destroy!(error=nil)
+        object_string = self.inspect
+        oid = _raw_instance.object_id
+        ::Zoidberg.logger.debug "*** Destroying zoidberg instance #{object_string}"
         super do
           _raw_threads.map do |thread|
-            thread.raise ::Zoidberg::DeadException.new('Instance in terminated state!')
+            thread.raise ::Zoidberg::DeadException.new('Instance in terminated state!', oid)
             ::Thread.new(thread) do |thread|
-              thread.join(5)
+              next if thread == ::Thread.current
+              thread.join(::Zoidberg::Proxy::Liberated::THREAD_KILL_AFTER)
               if(thread.alive?)
                 ::Zoidberg.logger.error "Failed to halt async thread, killing: #{thread.inspect}"
                 thread.kill
@@ -154,9 +156,10 @@ module Zoidberg
           @_accessing_threads.each do |thread|
             if(thread.alive?)
               begin
-                thread.raise ::Zoidberg::DeadException.new('Instance in terminated state!')
+                thread.raise ::Zoidberg::DeadException.new('Instance in terminated state!', oid)
                 ::Thread.new(thread) do |thread|
-                  thread.join(5)
+                  next if thread == ::Thread.current
+                  thread.join(::Zoidberg::Proxy::Liberated::THREAD_KILL_AFTER)
                   if(thread.alive?)
                     ::Zoidberg.logger.error "Failed to halt accessing thread, killing: #{thread.inspect}"
                     thread.kill
@@ -168,6 +171,7 @@ module Zoidberg
           end
           @_accessing_threads.clear
         end
+        ::Zoidberg.logger.debug "!!! Destroyed zoidberg instance #{object_string}"
       end
 
     end

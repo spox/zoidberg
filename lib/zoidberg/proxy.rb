@@ -53,6 +53,10 @@ module Zoidberg
       raise NotImplementedError
     end
 
+    def _zoidberg_unsupervise
+      @_supervised = false
+    end
+
     # Set the raw instance into the proxy and link proxy to instance
     #
     # @param inst [Object] raw instance being wrapped
@@ -124,21 +128,15 @@ module Zoidberg
     def _zoidberg_unexpected_error(e)
       ::Zoidberg.logger.error "Unexpected exception: #{e.class} - #{e}"
       ::Zoidberg.logger.debug "#{e.class}: #{e}\n#{e.backtrace.join("\n")}"
-      unless((defined?(Timeout) && e.is_a?(Timeout::Error)) || e.is_a?(::Zoidberg::DeadException))
-        if(_zoidberg_link)
-          if(_zoidberg_link.class.trap_exit)
-            ::Zoidberg.logger.warn "Calling linked exit trapper #{@_raw_instance.class.name} -> #{_zoidberg_link.class}: #{e.class} - #{e}"
-            _zoidberg_link.async.send(
-              _zoidberg_link.class.trap_exit, @_raw_instance, e
-            )
-          end
-        else
-          if(@_supervised)
-            ::Zoidberg.logger.warn "Unexpected error for supervised class `#{@_raw_instance.class.name}`. Handling error (#{e.class} - #{e})"
-            ::Zoidberg.logger.debug "#{e.class}: #{e}\n#{e.backtrace.join("\n")}"
-            _zoidberg_handle_unexpected_error(e)
-          end
+      if(_zoidberg_link)
+        if(_zoidberg_link.class.trap_exit)
+          ::Zoidberg.logger.warn "Calling linked exit trapper #{@_raw_instance.class.name} -> #{_zoidberg_link.class}: #{e.class} - #{e}"
+          _zoidberg_link.async.send(
+            _zoidberg_link.class.trap_exit, @_raw_instance, e
+          )
         end
+      else
+        _zoidberg_handle_unexpected_error(e)
       end
     end
 
@@ -156,20 +154,23 @@ module Zoidberg
     # @param error [Exception] exception that was caught
     # @return [TrueClass]
     def _zoidberg_handle_unexpected_error(error)
-      unless(::Zoidberg.in_shutdown?)
-        if(_raw_instance.respond_to?(:restart))
+      if(_raw_instance.respond_to?(:restart))
+        unless(::Zoidberg.in_shutdown?)
           begin
             _raw_instance.restart(error)
             return # short circuit
           rescue => e
           end
         end
-        _zoidberg_destroy!
+      end
+      _zoidberg_destroy!
+      if(@_supervised && !::Zoidberg.in_shutdown?)
         _aquire_lock!
         begin
           args = _build_args.dup
           inst = args.shift.unshelled_new(*args.first, &args.last)
           _zoidberg_set_instance(inst)
+          ::Zoidberg.logger.debug "Supervised instance has been rebuilt: #{inst}"
           if(_raw_instance.respond_to?(:restarted!))
             _raw_instance.restarted!
           end
@@ -188,20 +189,30 @@ module Zoidberg
     # @return [TrueClass]
     def _zoidberg_destroy!(error=nil, &block)
       unless(_raw_instance.respond_to?(:_zoidberg_destroyed))
+        if(::Zoidberg.in_shutdown?)
+          @_zoidberg_timer.terminate if @_zoidberg_timer
+          @_zoidberg_signal.terminate if @_zoidberg_signal
+        end
         if(_raw_instance.respond_to?(:terminate))
-          if(_raw_instance.method(:terminate).arity == 0)
-            _raw_instance.terminate
-          else
-            _raw_instance.terminate(error)
+          begin
+            if(_raw_instance.method(:terminate).arity == 0)
+              _raw_instance.terminate
+            else
+              _raw_instance.terminate(error)
+            end
+          rescue => e
+            ::Zoidberg.logger.error "Unexpected exception caught during terminatation of #{self}: #{e}"
+            ::Zoidberg.logger.debug "#{e.class}: #{e}\n#{e.backtrace.join("\n")}"
           end
         end
+        block.call if block
+        oid = _raw_instance.object_id
         death_from_above = ::Proc.new do |*_|
-          ::Kernel.raise ::Zoidberg::DeadException.new('Instance in terminated state!')
+          ::Kernel.raise ::Zoidberg::DeadException.new('Instance in terminated state!', oid)
         end
         death_from_above_display = ::Proc.new do
           "#<#{self.class.name}:TERMINATED>"
         end
-        block.call if block
         _raw_instance.instance_variables.each do |i_var|
           _raw_instance.remove_instance_variable(i_var)
         end
@@ -219,7 +230,12 @@ module Zoidberg
       end
       true
     end
-    alias_method :terminate, :_zoidberg_destroy!
+
+    def terminate
+      _zoidberg_unsupervise
+      _zoidberg_destroy!
+    end
+#    alias_method :terminate, :_zoidberg_destroy!
 
     # @return [self]
     def _zoidberg_object
@@ -243,6 +259,23 @@ module Zoidberg
     def async(*args, &block)
       _raw_instance.async(*args, &block)
     end
+
+    # Initialize the signal instance if not
+    def _zoidberg_signal_interface
+      unless(@_zoidberg_signal)
+        @_zoidberg_signal = ::Zoidberg::Signal.new(:cache_signals => self.class.option?(:cache_signals))
+      end
+      @_zoidberg_signal
+    end
+
+    # @return [Timer]
+    def _zoidberg_timer
+      unless(@_zoidberg_timer)
+        @_zoidberg_timer = Timer.new
+      end
+      @_zoidberg_timer
+    end
+
 
   end
 end

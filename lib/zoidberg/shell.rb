@@ -3,7 +3,26 @@ require 'zoidberg'
 module Zoidberg
 
   # Customized exception type used when instance has been terminated
-  class DeadException < RuntimeError; end
+  class DeadException < StandardError
+    attr_reader :origin_object_id
+    def initialize(message, origin_id=nil)
+      super message
+      @origin_object_id = origin_id
+    end
+  end
+
+  # Customized exception type to wrap allowed errors
+  class AbortException < StandardError
+    attr_accessor :original_exception
+
+    def to_s
+      if(original_exception)
+        "#{original_exception.class}: #{original_exception}"
+      else
+        super
+      end
+    end
+  end
 
   # Librated proxy based shell
   module SoftShell
@@ -24,6 +43,11 @@ module Zoidberg
             got_lock = locked
             begin
               target.send(*args, &block)
+            rescue Zoidberg::DeadException => e
+              if(e.origin_object_id == target.object_id)
+                got_lock = false
+              end
+              raise
             rescue StandardError, ScriptError => e
               origin_proxy._zoidberg_unexpected_error(e)
               raise
@@ -46,6 +70,9 @@ module Zoidberg
       begin
         result = yield if block_given?
         result
+      rescue ::Zoidberg::DeadException => e
+        re_lock = false if e.origin_object_id == object_id
+        raise
       rescue ::StandardError, ::ScriptError => e
         raise e
       ensure
@@ -63,6 +90,13 @@ module Zoidberg
           thread = ::Thread.new do
             begin
               self.instance_exec(&block)
+            rescue Zoidberg::DeadException => e
+              if(e.origin_object_id == object_id)
+                raise
+              else
+                _zoidberg_proxy._zoidberg_unexpected_error(e)
+                raise
+              end
             rescue ::StandardError, ::ScriptError => e
               _zoidberg_proxy._zoidberg_unexpected_error(e)
               raise
@@ -74,6 +108,13 @@ module Zoidberg
             begin
               got_lock = true
               self.instance_exec(&block)
+            rescue Zoidberg::DeadException => e
+              if(e.origin_object_id == object_id)
+                got_lock = false
+              else
+                _zoidberg_proxy._zoidberg_unexpected_error(e)
+              end
+              raise
             rescue ::StandardError, ::ScriptError => e
               _zoidberg_proxy._zoidberg_unexpected_error(e)
               raise
@@ -219,18 +260,12 @@ module Zoidberg
 
       # Initialize the signal instance if not
       def _zoidberg_signal_interface
-        unless(@_zoidberg_signal)
-          @_zoidberg_signal = ::Zoidberg::Signal.new(:cache_signals => self.class.option?(:cache_signals))
-        end
-        @_zoidberg_signal
+        _zoidberg_proxy._zoidberg_signal_interface
       end
 
       # @return [Timer]
       def timer
-        unless(@_zoidberg_timer)
-          @_zoidberg_timer = Timer.new
-        end
-        @_zoidberg_timer
+        _zoidberg_proxy._zoidberg_timer
       end
 
       # Register a recurring action
@@ -307,6 +342,21 @@ module Zoidberg
       def link(inst)
         inst._zoidberg_link = current_self
         true
+      end
+
+      # Customized method for raising exceptions that have been
+      # properly handled (preventing termination)
+      #
+      # @param e [Exception]
+      # @raises [AbortException]
+      def abort(e)
+        unless(e.is_a?(::Exception))
+          $stdout.puts "E: #{e.class} - #{e.ancestors}"
+          e = StandardError.new(e)
+        end
+        new_e = ::Zoidberg::AbortException.new
+        new_e.original_exception = e
+        ::Kernel.raise new_e
       end
 
     end
