@@ -5,7 +5,6 @@ describe Zoidberg::Supervise do
   it 'should automatically load Zoidberg::Shell' do
     c = Class.new
     c.class_eval{ include Zoidberg::Supervise }
-    c.ancestors.must_include Zoidberg::Supervise::InstanceMethods
     c.ancestors.must_include Zoidberg::Shell::InstanceMethods
   end
 
