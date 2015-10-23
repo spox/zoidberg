@@ -1,3 +1,9 @@
+# v0.2.0
+* Update termination behaviors to ensure expected results
+* Provide and use flag for system shutdown to disable supervision
+* Proper termination behavior when not supervised
+* Prevent pool from dying on worker exceptions
+
 # v0.1.12
 * Move event signal to abstract proxy
 * Update timeout library usage
