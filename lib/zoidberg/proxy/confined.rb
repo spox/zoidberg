@@ -60,7 +60,7 @@ module Zoidberg
           else
             res = _isolated_request(*args, &block)
           end
-        rescue ::Zoidberg::Supervise::AbortException => e
+        rescue ::Zoidberg::AbortException => e
           ::Kernel.raise e.original_exception
         rescue ::Exception => e
           _zoidberg_unexpected_error(e)
@@ -82,7 +82,7 @@ module Zoidberg
           _raw_instance.__send__(method_name, *args, &block)
         else
           unless(_source_thread.alive?)
-            ::Kernel.raise ::Zoidberg::DeadException.new('Instance in terminated state!')
+            ::Kernel.raise ::Zoidberg::DeadException.new('Instance in terminated state!', object_id)
           end
           ::Zoidberg.logger.debug "Received request from remote thread. Added to queue: #{_raw_instance.class}##{method_name}(#{args.map(&:inspect).join(', ')})"
           response_queue = ::Queue.new
@@ -140,7 +140,7 @@ module Zoidberg
           end
         ensure
           until(_requests.empty)
-            requests.pop[:response] << ::Zoidberg::DeadException.new('Instance in terminated state!')
+            requests.pop[:response] << ::Zoidberg::DeadException.new('Instance in terminated state!', object_id)
           end
         end
       end
@@ -191,7 +191,7 @@ module Zoidberg
                 end
               end
             else
-              request[:response] << ::Zoidberg::DeadException.new('Instance in terminated state!')
+              request[:response] << ::Zoidberg::DeadException.new('Instance in terminated state!', object_id)
               request[:task].halt!
             end
           end
