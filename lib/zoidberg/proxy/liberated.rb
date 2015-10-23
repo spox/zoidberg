@@ -21,7 +21,7 @@ module Zoidberg
         @_locker = nil
         @_locker_count = 0
         @_zoidberg_signal = nil
-        @_raw_threads = ::Smash.new{ ::Array.new }
+        @_raw_threads = []
         @_supervised = klass.ancestors.include?(::Zoidberg::Supervise)
       end
 
@@ -93,7 +93,7 @@ module Zoidberg
       # @param thread [Thread]
       # @return [TrueClass]
       def _zoidberg_thread(thread)
-        _raw_threads[self.object_id].push(thread)
+        _raw_threads.push(thread)
         true
       end
 
@@ -141,16 +141,27 @@ module Zoidberg
       # @return [TrueClass]
       def _zoidberg_destroy!(error=nil)
         super do
-          _raw_threads[_raw_instance.object_id].map do |thread|
+          _raw_threads.map do |thread|
             thread.raise ::Zoidberg::DeadException.new('Instance in terminated state!')
-          end.map do |thread|
-            thread.join(2)
-          end.find_all(&:alive?).map(&:kill)
-          _raw_threads.delete(_raw_instance.object_id)
-          @_accessing_threads.each do |thr|
-            if(thr.alive?)
+            ::Thread.new(thread) do |thread|
+              thread.join(5)
+              if(thread.alive?)
+                ::Zoidberg.logger.error "Failed to halt async thread, killing: #{thread.inspect}"
+                thread.kill
+              end
+            end
+          end
+          @_accessing_threads.each do |thread|
+            if(thread.alive?)
               begin
-                thr.raise ::Zoidberg::DeadException.new('Instance in terminated state!')
+                thread.raise ::Zoidberg::DeadException.new('Instance in terminated state!')
+                ::Thread.new(thread) do |thread|
+                  thread.join(5)
+                  if(thread.alive?)
+                    ::Zoidberg.logger.error "Failed to halt accessing thread, killing: #{thread.inspect}"
+                    thread.kill
+                  end
+                end
               rescue
               end
             end
