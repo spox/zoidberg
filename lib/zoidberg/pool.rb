@@ -79,7 +79,17 @@ module Zoidberg
     def method_missing(*args, &block)
       worker = _zoidberg_free_worker
       current_self._release_lock!
-      worker.send(*args, &block)
+      begin
+        worker.send(*args, &block)
+      rescue Zoidberg::DeadException => e
+        if(e.origin_object_id == object_id)
+          raise e
+        else
+          abort e
+        end
+      rescue => e
+        abort e
+      end
     end
 
     # Find or wait for a free worker
