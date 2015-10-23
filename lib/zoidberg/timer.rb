@@ -70,9 +70,6 @@ module Zoidberg
 
     include Zoidberg::SoftShell
 
-    # Custom exception used to wakeup timer
-    class Wakeup < StandardError; end
-
     # Wakeup string
     WAKEUP = "WAKEUP\n"
 
@@ -204,6 +201,11 @@ module Zoidberg
       current_self
     end
 
+    # Clean up timer thread
+    def terminate
+      @thread.raise Zoidberg::DeadException.new('Instance in terminated state', object_id)
+    end
+
     protected
 
     # Run the timer loop
@@ -218,8 +220,13 @@ module Zoidberg
         begin
           run_ready
           reset(false)
-        rescue DeadException
-          raise
+        rescue DeadException => e
+          if(e.origin_object_id == object_id)
+            Zoidberg.logger.debug "<#{self}> Terminated state encountered. Falling out of run loop!"
+            raise
+          else
+            current_self.raise e
+          end
         rescue => e
           Zoidberg.logger.error "<#{self}> Unexpected error in runner: #{e.class.name} - #{e}"
           Zoidberg.logger.debug "<#{self}> #{e.class.name}: #{e}\n#{e.backtrace.join("\n")}"
