@@ -80,6 +80,15 @@ module Zoidberg
       val == EMPTY_VALUE ? (Time.now.to_f - start_sleep) : val
     end
 
+    # Force any waiter threads into an error state
+    def terminate
+      waiters.each do |k,v|
+        v[:threads].each do |thread|
+          thread.raise ::Zoidberg::DeadException.new('Instance in terminated state!', object_id)
+        end
+      end
+    end
+
     protected
 
     # Initialize the signal structure data
