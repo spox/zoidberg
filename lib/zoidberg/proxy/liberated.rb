@@ -95,6 +95,15 @@ module Zoidberg
         true
       end
 
+      # Deregister a thread once it has completed
+      #
+      # @param thread [Thread]
+      # @return [TrueClass]
+      def _zoidberg_unthread(thread)
+        _raw_threads.delete(thread)
+        true
+      end
+
       # Aquire the lock to access real instance. If already locked, will
       # wait until lock can be aquired.
       #
