@@ -1,3 +1,7 @@
+# v0.2.2
+* Remove async threads once they have reached completion
+* Attempt to locate free worker in pool for async, random pick if none
+
 # v0.2.0
 * Update termination behaviors to ensure expected results
 * Provide and use flag for system shutdown to disable supervision
