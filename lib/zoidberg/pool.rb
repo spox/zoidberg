@@ -75,6 +75,12 @@ module Zoidberg
       true
     end
 
+    # Proxy async to prevent synchronized access
+    def async(*args,&block)
+      worker = _workers.detect(&:_zoidberg_available?) || _workers.sample
+      worker.send(:async, *args, &block)
+    end
+
     # Used to proxy request to worker
     def method_missing(*args, &block)
       worker = _zoidberg_free_worker
