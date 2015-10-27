@@ -39,9 +39,10 @@ module Zoidberg
       def method_missing(*args, &block)
         target._zoidberg_thread(
           Thread.new{
-            origin_proxy._aquire_lock! if locked
-            got_lock = locked
+            got_lock = false
             begin
+              origin_proxy._aquire_lock! if locked
+              got_lock = locked
               target.send(*args, &block)
             rescue Zoidberg::DeadException => e
               if(e.origin_object_id == target.object_id)
@@ -53,6 +54,7 @@ module Zoidberg
               raise
             ensure
               origin_proxy._release_lock! if got_lock
+              origin_proxy._zoidberg_unthread(Thread.current)
             end
           }
         )
