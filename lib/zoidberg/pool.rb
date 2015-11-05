@@ -76,7 +76,7 @@ module Zoidberg
     end
 
     # Proxy async to prevent synchronized access
-    def async(*args,&block)
+    def async(*args, &block)
       worker = _workers.detect(&:_zoidberg_available?) || _workers.sample
       worker.send(:async, *args, &block)
     end
