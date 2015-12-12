@@ -66,6 +66,11 @@ module Zoidberg
         )
       end
 
+      # @return [Float] reset the action
+      def reset
+        @last_run = Time.now.to_f
+      end
+
     end
 
     include Zoidberg::SoftShell
