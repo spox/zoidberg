@@ -132,6 +132,10 @@ module Zoidberg
         oid = _raw_instance.object_id
         ::Zoidberg.logger.debug "*** Destroying zoidberg instance #{object_string}"
         super do
+          _thread_pool.shutdown
+          unless(_thread_pool.wait_for_termination(2))
+            _thread_pool.kill
+          end
           @_accessing_threads.each do |thread|
             if(thread.alive?)
               begin
@@ -150,7 +154,6 @@ module Zoidberg
           end
           @_accessing_threads.clear
         end
-        _thread_pool.shutdown
         ::Zoidberg.logger.debug "!!! Destroyed zoidberg instance #{object_string}"
       end
 
