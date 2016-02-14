@@ -4,21 +4,21 @@ module Zoidberg
   # Perform action and fetch result in the future
   class Future
 
-    # @return [Thread] underlying thread running task
-    attr_reader :thread
+    # @return [Concurrent::Future] underlying thread running task
+    attr_reader :future
 
     # Create a new instance
     #
     # @yield block to execute
     # @return [self]
     def initialize(&block)
-      @thread = Thread.new(&block)
+      @future = Concurrent::Future.execute(&block)
     end
 
     # @return [Object] result value
     def value
       unless(@value)
-        @value = @thread.value
+        @value = @future.value
       end
       @value
     end
@@ -27,7 +27,7 @@ module Zoidberg
     #
     # @return [TrueClass, FalseClass]
     def available?
-      !thread.alive?
+      future.fulfilled?
     end
 
   end
