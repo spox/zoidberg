@@ -1,6 +1,8 @@
 require 'bogo'
-require 'thread'
 require 'securerandom'
+require 'concurrent'
+require 'concurrent-edge'
+
 require 'zoidberg/version'
 
 # Why not Zoidberg!?
