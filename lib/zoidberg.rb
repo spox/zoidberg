@@ -26,7 +26,7 @@ module Zoidberg
 
   class << self
 
-    attr_accessor :signal_shutdown
+    attr_reader :signal_shutdown
     attr_accessor :default_shell
 
     # @return [Zoidberg::Logger]
@@ -48,6 +48,12 @@ module Zoidberg
     # @return [String] UUID
     def uuid
       SecureRandom.uuid
+    end
+
+    def signal_shutdown=(val)
+      @signal_shutdown = !!val
+      Concurrent::AtExitImplementation.new.install.run if val
+      @signal_shutdown
     end
 
     def signal_reset
