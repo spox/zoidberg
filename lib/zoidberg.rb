@@ -26,7 +26,9 @@ module Zoidberg
 
   class << self
 
+    # @return [TrueClass, FalseClass]
     attr_reader :signal_shutdown
+    # @return [Module]
     attr_accessor :default_shell
 
     # @return [Zoidberg::Logger]
@@ -50,16 +52,28 @@ module Zoidberg
       SecureRandom.uuid
     end
 
+    # Flag shutdown state
+    #
+    # @param val [Truthy, Falsey]
+    # @return [TrueClass, FalseClass]
     def signal_shutdown=(val)
       @signal_shutdown = !!val
-      Concurrent::AtExitImplementation.new.install.run if val
+      # NOTE: Manually call registered at exit items to force
+      # global thread pools and related structures to be shut
+      # down. Wrapped in a thread to prevent locking issues
+      # when set within trap context
+      Thread.new{ Concurrent.const_get(:AtExit).run } if val
       @signal_shutdown
     end
 
+    # Reset shutdown state
+    #
+    # @return [FalseClass]
     def signal_reset
       self.signal_shutdown = false
     end
 
+    # @return [TrueClass, FalseClass]
     def in_shutdown?
       !!self.signal_shutdown
     end
