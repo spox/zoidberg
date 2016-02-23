@@ -1,3 +1,6 @@
+# v0.3.0
+* Initial internal refactor utilizing ruby-concurrent
+
 # v0.2.2
 * Remove async threads once they have reached completion
 * Attempt to locate free worker in pool for async, random pick if none
