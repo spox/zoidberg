@@ -10,8 +10,8 @@ module Zoidberg
 
       # @return [Thread] current owner of lock
       attr_reader :_locker
-      # @return [Hash<Integer:Thread>]
-      attr_reader :_raw_threads
+      # @return [Concurrent::CachedThreadPool]
+      attr_reader :_thread_pool
 
       # Create a new proxy instance, new real instance, and link them
       #
@@ -24,7 +24,7 @@ module Zoidberg
         @_locker = nil
         @_locker_count = 0
         @_zoidberg_signal = nil
-        @_raw_threads = []
+        @_thread_pool = ::Concurrent::CachedThreadPool.new
         @_supervised = klass.ancestors.include?(::Zoidberg::Supervise)
       end
 
@@ -85,25 +85,6 @@ module Zoidberg
         !_zoidberg_locked?
       end
 
-      # Register a running thread for this instance. Registered
-      # threads are tracked and killed on cleanup
-      #
-      # @param thread [Thread]
-      # @return [TrueClass]
-      def _zoidberg_thread(thread)
-        _raw_threads.push(thread)
-        true
-      end
-
-      # Deregister a thread once it has completed
-      #
-      # @param thread [Thread]
-      # @return [TrueClass]
-      def _zoidberg_unthread(thread)
-        _raw_threads.delete(thread)
-        true
-      end
-
       # Aquire the lock to access real instance. If already locked, will
       # wait until lock can be aquired.
       #
@@ -151,16 +132,9 @@ module Zoidberg
         oid = _raw_instance.object_id
         ::Zoidberg.logger.debug "*** Destroying zoidberg instance #{object_string}"
         super do
-          _raw_threads.map do |thread|
-            thread.raise ::Zoidberg::DeadException.new('Instance in terminated state!', oid)
-            ::Thread.new(thread) do |thread|
-              next if thread == ::Thread.current
-              thread.join(::Zoidberg::Proxy::Liberated::THREAD_KILL_AFTER)
-              if(thread.alive?)
-                ::Zoidberg.logger.error "Failed to halt async thread, killing: #{thread.inspect}"
-                thread.kill
-              end
-            end
+          _thread_pool.shutdown
+          unless(_thread_pool.wait_for_termination(2))
+            _thread_pool.kill
           end
           @_accessing_threads.each do |thread|
             if(thread.alive?)

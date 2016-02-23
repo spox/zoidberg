@@ -37,27 +37,24 @@ module Zoidberg
         @target = proxy._raw_instance
       end
       def method_missing(*args, &block)
-        target._zoidberg_thread(
-          Thread.new{
-            got_lock = false
-            begin
-              origin_proxy._aquire_lock! if locked
-              got_lock = locked
-              target.send(*args, &block)
-            rescue Zoidberg::DeadException => e
-              if(e.origin_object_id == target.object_id)
-                got_lock = false
-              end
-              raise
-            rescue StandardError, ScriptError => e
-              origin_proxy._zoidberg_unexpected_error(e)
-              raise
-            ensure
-              origin_proxy._release_lock! if got_lock
-              origin_proxy._zoidberg_unthread(Thread.current)
+        origin_proxy._thread_pool << lambda{
+          got_lock = false
+          begin
+            origin_proxy._aquire_lock! if locked
+            got_lock = locked
+            target.send(*args, &block)
+          rescue Zoidberg::DeadException => e
+            if(e.origin_object_id == target.object_id)
+              got_lock = false
             end
-          }
-        )
+            raise
+          rescue StandardError, ScriptError => e
+            origin_proxy._zoidberg_unexpected_error(e)
+            raise
+          ensure
+            origin_proxy._release_lock! if got_lock
+          end
+        }
         nil
       end
     end
@@ -89,7 +86,7 @@ module Zoidberg
     def async(locked=false, &block)
       if(block_given?)
         unless(locked)
-          thread = ::Thread.new do
+          _zoidberg_proxy._thread_pool << lambda{
             begin
               self.instance_exec(&block)
             rescue Zoidberg::DeadException => e
@@ -103,9 +100,9 @@ module Zoidberg
               _zoidberg_proxy._zoidberg_unexpected_error(e)
               raise
             end
-          end
+          }
         else
-          thread = ::Thread.new do
+          _zoidberg_proxy._thread_pool << lambda{
             _zoidberg_proxy._aquire_lock!
             begin
               got_lock = true
@@ -123,23 +120,12 @@ module Zoidberg
             ensure
               _zoidberg_proxy._release_lock! if got_lock
             end
-          end
+          }
         end
-        _zoidberg_thread(thread)
         nil
       else
         ::Zoidberg::SoftShell::AsyncProxy.new(locked, _zoidberg_proxy)
       end
-    end
-
-    # Register a running thread for this instance. Registered
-    # threads are tracked and killed on cleanup
-    #
-    # @param thread [Thread]
-    # @return [TrueClass]
-    def _zoidberg_thread(thread)
-      _zoidberg_proxy._zoidberg_thread(thread)
-      true
     end
 
     # Provide a customized sleep behavior which will unlock the real
