@@ -15,6 +15,7 @@ Gem::Specification.new do |s|
   s.add_runtime_dependency 'concurrent-ruby-edge', '~> 0.2.0'
   s.add_runtime_dependency 'mono_logger'
   s.add_development_dependency 'pry'
+  s.add_development_dependency 'rake'
   s.add_development_dependency 'minitest'
   s.files = Dir['lib/**/*'] + %w(zoidberg.gemspec README.md CHANGELOG.md CONTRIBUTING.md LICENSE)
 end

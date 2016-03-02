@@ -1,4 +1,4 @@
-require 'minitest/autorun'
+require_relative '../helper'
 
 describe Zoidberg::Shell do
 
